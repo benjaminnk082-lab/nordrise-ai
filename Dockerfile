@@ -51,7 +51,6 @@ RUN apt-get update \
         curl \
         git \
         openssl \
-        tini \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
     && npm cache clean --force
@@ -74,5 +73,7 @@ RUN chmod +x /app/docker-entrypoint.sh
 # Railway injects PORT; 3000 is the documented default.
 EXPOSE 3000
 
-# tini handles PID 1 responsibilities so SIGTERM reaches node cleanly.
-ENTRYPOINT ["/usr/bin/tini", "--", "/app/docker-entrypoint.sh"]
+# Railway provides a --init flag that wraps the container with an init process,
+# so we don't need tini ourselves. startCommand in railway.json runs the
+# entrypoint script directly.
+CMD ["/app/docker-entrypoint.sh"]

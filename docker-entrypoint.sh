@@ -3,6 +3,11 @@
 # Runs at container start. Hard-fails boot if auth isn't subscription mode.
 set -euo pipefail
 
+echo "[entrypoint] starting — node $(node --version), pwd=$(pwd)"
+echo "[entrypoint] DATABASE_URL set: ${DATABASE_URL:+yes}"
+echo "[entrypoint] OAUTH token set: ${CLAUDE_CODE_OAUTH_TOKEN:+yes}"
+echo "[entrypoint] TELEGRAM_BOT_TOKEN set: ${TELEGRAM_BOT_TOKEN:+yes}"
+
 # 1. Never allow paid API billing. Strip the var even if something set it.
 if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
   echo "[entrypoint] WARN: ANTHROPIC_API_KEY was set in env — unsetting to force subscription auth"
