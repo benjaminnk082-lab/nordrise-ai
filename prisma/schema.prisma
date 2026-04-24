@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id              String    @id @default(cuid())
+  telegramChatId  BigInt    @unique
+  claudeSessionId String?
+  createdAt       DateTime  @default(now())
+  lastActiveAt    DateTime  @updatedAt
+  messages        Message[]
+
+  @@index([lastActiveAt])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  sessionId  String
+  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role       String
+  content    String   @db.Text
+  tokens     Int?
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  @@index([sessionId, createdAt])
+}
+
+model MemoryNote {
+  id        String   @id @default(cuid())
+  date      DateTime @unique
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+}

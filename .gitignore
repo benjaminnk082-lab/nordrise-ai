@@ -1,0 +1,41 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Runtime data
+logs/
+*.log
+
+# Sean's filesystem (Railway Volume in prod)
+workspace/
+
+# Claude Code credentials cache (Railway Volume in prod)
+.claude/
+
+# Prisma
+prisma/migrations/dev.db*
+prisma/*.db
+prisma/*.db-journal
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
