@@ -12,13 +12,21 @@ fi
 # 2. Ensure the workspace and claude credential dirs exist (Railway volumes mount here)
 mkdir -p "${WORKSPACE_DIR:-/app/workspace}" "/app/.claude"
 
-# 3. Apply any pending Prisma migrations (idempotent)
+# 3. Sync DB schema. Prefer migrate deploy when migrations exist, else db push.
 if [[ -n "${DATABASE_URL:-}" ]]; then
-  echo "[entrypoint] running prisma migrate deploy"
-  npx prisma migrate deploy --schema=./prisma/schema.prisma || {
-    echo "[entrypoint] prisma migrate deploy failed"
-    exit 3
-  }
+  if [[ -d ./prisma/migrations ]] && ls ./prisma/migrations/*/migration.sql >/dev/null 2>&1; then
+    echo "[entrypoint] running prisma migrate deploy"
+    npx prisma migrate deploy --schema=./prisma/schema.prisma || {
+      echo "[entrypoint] prisma migrate deploy failed"
+      exit 3
+    }
+  else
+    echo "[entrypoint] no migrations dir — running prisma db push (initial setup)"
+    npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate || {
+      echo "[entrypoint] prisma db push failed"
+      exit 3
+    }
+  fi
 fi
 
 # 4. Hard-gate the boot on subscription auth

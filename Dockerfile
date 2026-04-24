@@ -56,24 +56,20 @@ RUN apt-get update \
     && npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
     && npm cache clean --force
 
-# Non-root user
-RUN groupadd --system --gid 1001 sean \
-    && useradd --system --uid 1001 --gid sean --home-dir /app --shell /bin/bash sean \
-    && mkdir -p /app/.claude /app/workspace \
-    && chown -R sean:sean /app
+# NOTE: Running as root. Railway volumes mount with root ownership and a
+# non-root user couldn't write to them without extra init work.
+RUN mkdir -p /app/.claude /app/workspace
 
-COPY --chown=sean:sean package.json package-lock.json* ./
+COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev --no-audit --no-fund \
     && npm cache clean --force
 
-COPY --chown=sean:sean --from=builder /build/dist ./dist
-COPY --chown=sean:sean --from=builder /build/prisma ./prisma
-COPY --chown=sean:sean --from=builder /build/node_modules/.prisma ./node_modules/.prisma
-COPY --chown=sean:sean --from=builder /build/node_modules/@prisma ./node_modules/@prisma
-COPY --chown=sean:sean docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY --from=builder /build/dist ./dist
+COPY --from=builder /build/prisma ./prisma
+COPY --from=builder /build/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /build/node_modules/@prisma ./node_modules/@prisma
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
-
-USER sean
 
 # Railway injects PORT; 3000 is the documented default.
 EXPOSE 3000
