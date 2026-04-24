@@ -41,10 +41,10 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-# Runtime system deps + Claude Code CLI (pinned)
-# Bump CLAUDE_CODE_VERSION intentionally; floating "latest" is rejected to
-# avoid surprise behavior changes in verify-auth parsing.
-ARG CLAUDE_CODE_VERSION=1.0.60
+# Runtime system deps + Claude Code CLI.
+# Pin via build arg so we can bump intentionally. Minimum 1.0.88+ required
+# by the OAuth/subscription auth path used here.
+ARG CLAUDE_CODE_VERSION=latest
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
