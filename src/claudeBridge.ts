@@ -243,12 +243,10 @@ export class ClaudeBridge extends EventEmitter {
         const rateLimited = detectRateLimit(stderrSnippet + ' ' + (resultEvent?.result ?? ''));
         const costUsd = resultEvent?.total_cost_usd ?? resultEvent?.cost_usd ?? 0;
 
-        if (costUsd > 0) {
-          logger.error(
-            { costUsd, sessionId: resolvedSessionId },
-            'billed-api cost detected in claude response — this should never happen with OAuth subscription',
-          );
-        }
+        // NOTE: cost_usd is reported informationally even for subscription
+        // calls in Claude Code 1.0.88+. It does NOT imply paid billing as
+        // long as auth is via CLAUDE_CODE_OAUTH_TOKEN and ANTHROPIC_API_KEY
+        // is unset. The boot-time verify-auth check enforces that invariant.
 
         resolve({
           text: finalText,

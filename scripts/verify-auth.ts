@@ -90,21 +90,26 @@ function classify(r: ClaudeJsonResult): VerifyResult {
     return { ok: false, authMode: 'unknown', detail: `claude returned is_error=true: ${r.result ?? ''}` };
   }
 
-  const cost = r.total_cost_usd ?? r.cost_usd;
-
-  // Subscription responses report 0 (or undefined) cost. Paid API reports > 0.
-  if (cost === undefined || cost === 0) {
-    return { ok: true, authMode: 'subscription', detail: 'cost_usd is 0/undefined → subscription mode' };
-  }
-  if (cost > 0) {
+  // Modern Claude Code (1.0.88+) reports cost_usd even for subscription calls
+  // as an informational estimate — it is NOT a reliable proxy for billing mode.
+  // We instead rely on environmental invariants:
+  //   - ANTHROPIC_API_KEY must be unset (checked in checkEnv)
+  //   - CLAUDE_CODE_OAUTH_TOKEN must look like an OAuth token (sk-ant-oat01-…)
+  //   - The test call must succeed
+  const token = process.env.CLAUDE_CODE_OAUTH_TOKEN ?? '';
+  if (!token.startsWith('sk-ant-oat01-')) {
     return {
       ok: false,
-      authMode: 'api_billed',
-      detail: `total_cost_usd=${cost} → paid API billing detected. Abort.`,
+      authMode: 'unknown',
+      detail: `CLAUDE_CODE_OAUTH_TOKEN does not look like an OAuth token (expected prefix sk-ant-oat01-)`,
     };
   }
-
-  return { ok: false, authMode: 'unknown', detail: `could not determine billing mode: ${JSON.stringify(r)}` };
+  const cost = r.total_cost_usd ?? r.cost_usd ?? 0;
+  return {
+    ok: true,
+    authMode: 'subscription',
+    detail: `OAuth token detected, no API key set, call succeeded (informational cost_usd=${cost})`,
+  };
 }
 
 async function main() {
