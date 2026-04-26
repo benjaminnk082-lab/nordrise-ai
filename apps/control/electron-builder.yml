@@ -1,0 +1,36 @@
+appId: tech.bennyk.nordrise.control
+productName: Nordrise Control
+artifactName: "Nordrise Installer.${ext}"
+copyright: "© 2026 Benjamin Nicolai Kleiven / Nordrise"
+
+directories:
+  output: release
+  buildResources: ../installer/assets
+
+files:
+  - dist/**/*
+  - "!**/*.map"
+  - package.json
+
+extraResources:
+  - from: dist/assets
+    to: assets
+
+asar: true
+compression: maximum
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  publisherName: "Nordrise"
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  shortcutName: "Nordrise Control"
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  include: ../installer/nordrise-installer.nsh
