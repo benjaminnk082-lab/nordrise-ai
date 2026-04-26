@@ -1,0 +1,31 @@
+name: Release control client
+
+on:
+  push:
+    tags: ['control-v*']
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install root deps + sync types
+        run: |
+          npm ci --no-audit --no-fund
+          npm run sync-control-types
+      - name: Install client deps
+        working-directory: apps/control
+        run: npm ci --no-audit --no-fund
+      - name: Build client
+        working-directory: apps/control
+        run: npm run build
+      - name: Package + publish
+        working-directory: apps/control
+        run: npx electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

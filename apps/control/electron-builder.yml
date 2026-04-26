@@ -19,6 +19,12 @@ extraResources:
 asar: true
 compression: maximum
 
+publish:
+  - provider: github
+    owner: bennyk-tech
+    repo: nordrise-ai
+    releaseType: release
+
 win:
   target:
     - target: nsis
