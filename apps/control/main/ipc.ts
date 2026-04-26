@@ -1,8 +1,15 @@
-import { ipcMain } from 'electron';
+import { ipcMain, net } from 'electron';
 import { setToken, getToken, deleteToken } from './keychain.js';
 
 const DEFAULT_BACKEND = 'https://sean-production-4fcf.up.railway.app';
 const TOKEN_SLOT = 'bearer';
+
+// Use Electron's net.fetch (Chromium network stack) — more reliable in
+// packaged apps than Node's global fetch on Windows where some TLS / undici
+// quirks can cause spurious failures.
+async function netFetch(url: string, init?: RequestInit): Promise<Response> {
+  return net.fetch(url, init);
+}
 
 export function registerIpc(): void {
   ipcMain.handle('auth:get-token', () => getToken(TOKEN_SLOT));
@@ -14,7 +21,7 @@ export function registerIpc(): void {
   ipcMain.handle('healthz', async () => {
     const backend = process.env.NORDRISE_BACKEND_URL ?? DEFAULT_BACKEND;
     try {
-      const r = await fetch(`${backend}/healthz`);
+      const r = await netFetch(`${backend}/healthz`);
       return { status: r.status, body: await r.json().catch(() => null) };
     } catch (err) {
       return { status: 0, body: null, error: String((err as Error).message) };
@@ -24,7 +31,7 @@ export function registerIpc(): void {
   ipcMain.handle('auth:verify-token', async (_e, token: string) => {
     const backend = process.env.NORDRISE_BACKEND_URL ?? DEFAULT_BACKEND;
     try {
-      const r = await fetch(`${backend}/control/sessions`, {
+      const r = await netFetch(`${backend}/control/sessions`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       return { ok: r.ok, status: r.status };

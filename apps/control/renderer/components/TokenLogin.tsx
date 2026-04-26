@@ -29,13 +29,28 @@ export function TokenLogin({ onDone }: { onDone: (token: string) => void }) {
     setStatus({ kind: 'verifying' });
     try {
       const verify = await verifyToken(t);
-      if (!verify.ok) {
-        setStatus({
-          kind: 'error',
-          message: verify.status === 401 ? 'Tokenet ble ikke godkjent av Sean.' : `Sean svarte ${verify.status}.`,
-        });
+
+      // Hard fail: backend is reachable but rejected the token.
+      if (verify.status === 401 || verify.status === 403) {
+        setStatus({ kind: 'error', message: 'Tokenet ble ikke godkjent av Sean.' });
         return;
       }
+
+      // Backend returned 2xx → token good, save and continue.
+      if (verify.ok) {
+        await setStoredToken(t);
+        onDone(t);
+        return;
+      }
+
+      // Network-level failure (status === 0) or unexpected non-401 status.
+      // Save the token anyway — user can retry actions once Sean is reachable.
+      const detail = verify.error
+        ? `${verify.error}`
+        : verify.status > 0
+          ? `Sean svarte ${verify.status}.`
+          : 'Ukjent nettverksfeil.';
+      console.warn('verify-token soft-fail, saving anyway:', detail);
       await setStoredToken(t);
       onDone(t);
     } catch (e) {
