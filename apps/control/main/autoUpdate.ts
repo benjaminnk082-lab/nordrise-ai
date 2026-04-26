@@ -5,42 +5,81 @@ import { app, BrowserWindow } from 'electron';
 
 const HOUR_MS = 60 * 60 * 1000;
 
+export type UpdateStatus =
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'up-to-date'; checkedAt: number }
+  | { kind: 'available'; version: string }
+  | { kind: 'downloading'; percent: number; transferred: number; total: number }
+  | { kind: 'downloaded'; version: string }
+  | { kind: 'error'; message: string; checkedAt: number }
+  | { kind: 'disabled-dev' };
+
+let status: UpdateStatus = { kind: 'idle' };
 let pendingUpdateVersion: string | null = null;
+const log: string[] = [];
+
+function pushLog(line: string): void {
+  const ts = new Date().toISOString().slice(11, 23);
+  const entry = `[${ts}] ${line}`;
+  log.push(entry);
+  if (log.length > 200) log.shift();
+  console.log(entry);
+}
+
+function broadcast(): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    w.webContents.send('app:update-status', status);
+  }
+}
+
+function setStatus(s: UpdateStatus): void {
+  status = s;
+  broadcast();
+}
 
 export function initAutoUpdate(): void {
-  if (!app.isPackaged) return;
+  if (!app.isPackaged) {
+    setStatus({ kind: 'disabled-dev' });
+    pushLog('disabled (running in dev — app.isPackaged=false)');
+    return;
+  }
 
   autoUpdater.autoDownload = true;
-  // v0.1.10: explicit user action required. The renderer shows a
-  // "Versjon X er klar — Relaunch nå" banner and the user clicks to
-  // install. Closing the app no longer triggers the installer.
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.allowPrerelease = false;
 
   autoUpdater.on('error', (err) => {
-    console.warn('[autoUpdate] error:', err?.message ?? err);
+    const msg = err?.stack ?? err?.message ?? String(err);
+    pushLog(`error: ${msg}`);
+    setStatus({ kind: 'error', message: err?.message ?? String(err), checkedAt: Date.now() });
   });
   autoUpdater.on('checking-for-update', () => {
-    console.log('[autoUpdate] checking…');
+    pushLog('checking for update…');
+    setStatus({ kind: 'checking' });
   });
   autoUpdater.on('update-available', (info) => {
-    console.log('[autoUpdate] update available:', info.version);
+    pushLog(`update available: ${info.version}`);
+    setStatus({ kind: 'available', version: info.version });
   });
-  autoUpdater.on('update-not-available', () => {
-    console.log('[autoUpdate] up to date');
+  autoUpdater.on('update-not-available', (info) => {
+    pushLog(`up to date (latest: ${info?.version ?? 'unknown'})`);
+    setStatus({ kind: 'up-to-date', checkedAt: Date.now() });
   });
   autoUpdater.on('download-progress', (p) => {
-    console.log(`[autoUpdate] downloading ${Math.round(p.percent)}%`);
+    pushLog(`downloading ${Math.round(p.percent)}% (${Math.round(p.transferred/1e6)}/${Math.round(p.total/1e6)}MB)`);
+    setStatus({ kind: 'downloading', percent: p.percent, transferred: p.transferred, total: p.total });
   });
   autoUpdater.on('update-downloaded', (info) => {
     pendingUpdateVersion = info.version;
-    console.log(`[autoUpdate] downloaded ${info.version} — pushing notification to renderer`);
+    pushLog(`downloaded ${info.version} — ready to install`);
+    setStatus({ kind: 'downloaded', version: info.version });
+    // Also push the legacy event for components still subscribed to it.
     for (const w of BrowserWindow.getAllWindows()) {
       w.webContents.send('app:update-downloaded', { version: info.version });
     }
   });
 
-  // Initial check on boot, then every hour while the app is running.
   void autoUpdater.checkForUpdatesAndNotify();
   setInterval(() => void autoUpdater.checkForUpdates().catch(() => {}), HOUR_MS);
 }
@@ -49,8 +88,30 @@ export function getPendingUpdateVersion(): string | null {
   return pendingUpdateVersion;
 }
 
+export function getUpdateStatus(): UpdateStatus {
+  return status;
+}
+
+export function getUpdateLog(): string[] {
+  return [...log];
+}
+
+export async function manualCheck(): Promise<UpdateStatus> {
+  if (!app.isPackaged) {
+    setStatus({ kind: 'disabled-dev' });
+    return status;
+  }
+  try {
+    pushLog('manual check requested');
+    await autoUpdater.checkForUpdates();
+  } catch (err) {
+    const message = (err as Error)?.message ?? String(err);
+    pushLog(`manual check failed: ${message}`);
+    setStatus({ kind: 'error', message, checkedAt: Date.now() });
+  }
+  return status;
+}
+
 export function quitAndInstall(): void {
-  // (isSilent=false ensures the installer is visible so the user can see
-  //  it actually run; isForceRunAfter=true relaunches the app afterwards.)
   autoUpdater.quitAndInstall(false, true);
 }

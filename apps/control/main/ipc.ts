@@ -1,6 +1,6 @@
 import { ipcMain, net, app, shell, Notification, BrowserWindow } from 'electron';
 import { setToken, getToken, deleteToken } from './keychain.js';
-import { getPendingUpdateVersion, quitAndInstall } from './autoUpdate.js';
+import { getPendingUpdateVersion, quitAndInstall, getUpdateStatus, getUpdateLog, manualCheck } from './autoUpdate.js';
 import { getStore, type QuickTaskInput } from './store.js';
 import { hidePopup } from './popup.js';
 import {
@@ -55,6 +55,9 @@ export function registerIpc(): void {
   ipcMain.handle('app:version', () => app.getVersion());
   ipcMain.handle('app:pending-update', () => getPendingUpdateVersion());
   ipcMain.handle('app:quit-and-install', () => { quitAndInstall(); });
+  ipcMain.handle('app:update-status', () => getUpdateStatus());
+  ipcMain.handle('app:update-log', () => getUpdateLog());
+  ipcMain.handle('app:update-check', () => manualCheck());
 
   ipcMain.handle('auth:get-token', () => getToken(TOKEN_SLOT));
   ipcMain.handle('auth:set-token', (_e, token: string) => setToken(TOKEN_SLOT, token));

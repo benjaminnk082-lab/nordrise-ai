@@ -2483,6 +2483,9 @@ input:-webkit-autofill:focus {
   font-size: 12px;
   color: rgba(244, 244, 247, 0.5);
 }
+.settings-version-status.tone-accent { color: #c4b0ff; }
+.settings-version-status.tone-warn { color: #e2b73c; }
+.settings-version-status.tone-danger { color: #ff8a8a; }
 
 .settings-version-pending {
   font-size: 12px;

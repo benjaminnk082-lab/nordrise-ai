@@ -33,3 +33,25 @@ export async function getPendingUpdate(): Promise<string | null> {
 export async function quitAndInstall(): Promise<void> {
   await window.nordrise.invoke<void>('app:quit-and-install');
 }
+
+export type UpdateStatus =
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'up-to-date'; checkedAt: number }
+  | { kind: 'available'; version: string }
+  | { kind: 'downloading'; percent: number; transferred: number; total: number }
+  | { kind: 'downloaded'; version: string }
+  | { kind: 'error'; message: string; checkedAt: number }
+  | { kind: 'disabled-dev' };
+
+export async function getUpdateStatus(): Promise<UpdateStatus> {
+  return window.nordrise.invoke<UpdateStatus>('app:update-status');
+}
+
+export async function getUpdateLog(): Promise<string[]> {
+  return window.nordrise.invoke<string[]>('app:update-log');
+}
+
+export async function checkForUpdate(): Promise<UpdateStatus> {
+  return window.nordrise.invoke<UpdateStatus>('app:update-check');
+}

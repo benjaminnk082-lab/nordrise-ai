@@ -13,6 +13,10 @@ import {
   pingHealthz,
   getPendingUpdate,
   clearStoredToken,
+  getUpdateStatus,
+  getUpdateLog,
+  checkForUpdate,
+  type UpdateStatus,
 } from '../lib/bridge';
 import { RoutinesSection } from './RoutinesSection';
 
@@ -598,40 +602,114 @@ export function SettingsModal({
 
           <div className="settings-divider" />
 
-          {/* VERSJON */}
+          {/* VERSJON / OPPDATERING */}
+          <UpdateSection version={version} />
+          <div className="settings-divider" />
           <section className="settings-section">
-            <h3 className="settings-section-title">Versjon</h3>
-            <div className="settings-version-row">
-              <span className="settings-version-num">v{version || '?'}</span>
-              {pendingVersion ? (
-                <span className="settings-version-pending">
-                  oppdatering {pendingVersion} klar — relaunch for å installere
-                </span>
-              ) : (
-                <span className="settings-version-status">opp-til-dato</span>
-              )}
-            </div>
-            <div className="settings-actions-row">
-              <button
-                type="button"
-                className="qt-btn-secondary"
-                onClick={() =>
-                  void getPendingUpdate().then((v) => setPendingVersion(v))
-                }
-              >
-                Sjekk for oppdatering
-              </button>
-              <button
-                type="button"
-                className="qt-btn-secondary"
-                onClick={() => void handleResetAll()}
-              >
-                Reset alle innstillinger
-              </button>
-            </div>
+            <h3 className="settings-section-title">Reset</h3>
+            <button type="button" className="qt-btn-secondary" onClick={() => void handleResetAll()}>
+              Reset alle innstillinger
+            </button>
           </section>
         </div>
       </div>
     </div>
   );
+}
+
+function UpdateSection({ version }: { version: string }) {
+  const [status, setStatus] = useState<UpdateStatus>({ kind: 'idle' });
+  const [log, setLog] = useState<string[]>([]);
+  const [showLog, setShowLog] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void getUpdateStatus().then(setStatus);
+    const off = window.nordrise.on('app:update-status', (s: any) => setStatus(s as UpdateStatus));
+    const t = setInterval(() => void getUpdateStatus().then(setStatus), 5000);
+    return () => { off(); clearInterval(t); };
+  }, []);
+
+  async function manualCheck() {
+    setBusy(true);
+    try {
+      const next = await checkForUpdate();
+      setStatus(next);
+      setLog(await getUpdateLog());
+      setShowLog(true);
+    } finally { setBusy(false); }
+  }
+
+  async function refreshLog() {
+    setLog(await getUpdateLog());
+    setShowLog(true);
+  }
+
+  const label = formatStatus(status);
+  const tone = statusTone(status);
+
+  return (
+    <section className="settings-section">
+      <h3 className="settings-section-title">Versjon &amp; oppdatering</h3>
+      <div className="settings-version-row">
+        <span className="settings-version-num">v{version || '?'}</span>
+        <span className={`settings-version-status ${tone}`}>{label}</span>
+      </div>
+      {status.kind === 'downloading' && (
+        <div style={{ marginTop: 6 }}>
+          <div style={{
+            height: 4, borderRadius: 2,
+            background: 'rgba(255,255,255,0.08)', overflow: 'hidden',
+          }}>
+            <div style={{
+              width: `${Math.round(status.percent)}%`, height: '100%',
+              background: 'linear-gradient(90deg, #a78bff, #7c5cff)', transition: 'width 200ms ease',
+            }} />
+          </div>
+        </div>
+      )}
+      {status.kind === 'error' && (
+        <div className="field-error" style={{ marginTop: 8 }}>{status.message}</div>
+      )}
+      <div className="settings-actions-row" style={{ marginTop: 12 }}>
+        <button type="button" className="qt-btn-secondary" disabled={busy || status.kind === 'checking' || status.kind === 'downloading'} onClick={() => void manualCheck()}>
+          {busy ? 'Sjekker…' : 'Sjekk for oppdatering'}
+        </button>
+        <button type="button" className="qt-btn-secondary" onClick={() => void refreshLog()}>
+          {showLog ? 'Oppdater logg' : 'Vis logg'}
+        </button>
+      </div>
+      {showLog && (
+        <pre style={{
+          marginTop: 10, padding: 12, borderRadius: 10,
+          background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.06)',
+          fontSize: 11, lineHeight: 1.5, color: 'rgba(244,244,247,0.7)',
+          fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+          maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap',
+        }}>
+          {log.length === 0 ? '(tom logg — sjekk for oppdatering først)' : log.join('\n')}
+        </pre>
+      )}
+    </section>
+  );
+}
+
+function formatStatus(s: UpdateStatus): string {
+  switch (s.kind) {
+    case 'idle': return 'klar';
+    case 'checking': return 'sjekker…';
+    case 'up-to-date': return 'opp-til-dato';
+    case 'available': return `versjon ${s.version} tilgjengelig — laster ned`;
+    case 'downloading': return `laster ned ${Math.round(s.percent)}%`;
+    case 'downloaded': return `versjon ${s.version} klar — relaunch for å installere`;
+    case 'error': return `feil: ${s.message}`;
+    case 'disabled-dev': return 'deaktivert (dev-modus)';
+  }
+}
+
+function statusTone(s: UpdateStatus): string {
+  if (s.kind === 'error') return 'tone-danger';
+  if (s.kind === 'downloaded' || s.kind === 'available') return 'tone-accent';
+  if (s.kind === 'downloading' || s.kind === 'checking') return 'tone-warn';
+  return '';
 }
