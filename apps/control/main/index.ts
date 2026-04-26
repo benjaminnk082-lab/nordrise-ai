@@ -5,6 +5,8 @@ import { mainWindowOptions } from './windows.js';
 import { registerIpc } from './ipc.js';
 import { initTray, setTrayStatus } from './tray.js';
 import { initAutoUpdate } from './autoUpdate.js';
+import { setPopupPreloadPath } from './popup.js';
+import { registerHotkeys, unregisterHotkeys } from './hotkeys.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -69,8 +71,10 @@ app.whenReady().then(async () => {
   });
 
   registerIpc();
+  setPopupPreloadPath(preloadPath());
   await createMainWindow();
   initTray(() => mainWin);
+  registerHotkeys(() => mainWin);
   setInterval(async () => {
     try {
       const url = process.env.NORDRISE_BACKEND_URL ?? 'https://sean-production-4fcf.up.railway.app';
@@ -84,6 +88,8 @@ app.whenReady().then(async () => {
   }, 30_000);
   initAutoUpdate();
 });
+
+app.on('will-quit', () => unregisterHotkeys());
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

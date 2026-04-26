@@ -8,6 +8,8 @@ import { ThreadList, type ActiveSelection } from './ThreadList';
 import { ChatPane, type ReadyAttachment } from './ChatPane';
 import { ThinkingPanel } from './ThinkingPanel';
 import { TelegramHistory } from './TelegramHistory';
+import { QuickTaskPalette } from './QuickTaskPalette';
+import { QuickTaskManager } from './QuickTaskManager';
 import { quitAndInstall, getPendingUpdate } from '../lib/bridge';
 
 export interface AppShellProps {
@@ -33,6 +35,9 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
   const [updateReady, setUpdateReady] = useState<{ version: string } | null>(
     pendingUpdate ? { version: pendingUpdate } : null,
   );
+
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [managerOpen, setManagerOpen] = useState(false);
 
   useEffect(() => {
     const off = window.nordrise.on('app:update-downloaded', (info: unknown) => {
@@ -167,6 +172,29 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
     onError('avbrutt');
   }, [stream, onError]);
 
+  // Ctrl+K opens the quick-task palette anywhere in the shell.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setPaletteOpen(true);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const handlePalettePick = useCallback(
+    (text: string) => {
+      if (!text.trim()) return;
+      // Fire directly through the same path as Composer submit. Empty
+      // attachments — clipboard-attach is a future hook (the QuickTask flag
+      // is persisted but not yet wired into the send path).
+      handleSubmit(text, []);
+    },
+    [handleSubmit],
+  );
+
   const handleNew = useCallback(async () => {
     try {
       const s = await newSession();
@@ -249,11 +277,29 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
               </span>
             )}
           </span>
+          <button
+            type="button"
+            onClick={() => setManagerOpen(true)}
+            className="link-button"
+          >
+            Quick-tasks
+          </button>
           <button type="button" onClick={() => void onLogout()} className="link-button">
             Logg ut
           </button>
         </div>
       </div>
+
+      <QuickTaskPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onPick={handlePalettePick}
+        onOpenManage={() => setManagerOpen(true)}
+      />
+      <QuickTaskManager
+        open={managerOpen}
+        onClose={() => setManagerOpen(false)}
+      />
     </div>
   );
 }

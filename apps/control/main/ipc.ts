@@ -1,6 +1,8 @@
-import { ipcMain, net, app } from 'electron';
+import { ipcMain, net, app, Notification, BrowserWindow } from 'electron';
 import { setToken, getToken, deleteToken } from './keychain.js';
 import { getPendingUpdateVersion, quitAndInstall } from './autoUpdate.js';
+import { getStore, type QuickTaskInput } from './store.js';
+import { hidePopup } from './popup.js';
 
 const DEFAULT_BACKEND = 'https://sean-production-4fcf.up.railway.app';
 const TOKEN_SLOT = 'bearer';
@@ -209,4 +211,46 @@ export function registerIpc(): void {
     const ac = activeStreams.get(streamId);
     if (ac) { ac.abort(); activeStreams.delete(streamId); }
   });
+
+  // Quick-tasks (SQLite-backed)
+  ipcMain.handle('qt:list', () => getStore().list());
+  ipcMain.handle('qt:get', (_e, id: string) => getStore().get(id));
+  ipcMain.handle('qt:create', (_e, input: QuickTaskInput) =>
+    getStore().create(input),
+  );
+  ipcMain.handle(
+    'qt:update',
+    (_e, p: { id: string; patch: Partial<QuickTaskInput> }) =>
+      getStore().update(p.id, p.patch),
+  );
+  ipcMain.handle('qt:delete', (_e, id: string) => getStore().delete(id));
+
+  // Mini-popup lifecycle + reply-toast
+  ipcMain.handle('popup:close', () => {
+    hidePopup();
+  });
+  ipcMain.handle(
+    'popup:reply',
+    (_e, payload: { user: string; assistant: string }) => {
+      if (!Notification.isSupported()) return;
+      const body = (payload.assistant || '').slice(0, 240) || '(tomt svar)';
+      const n = new Notification({
+        title: 'Sean svarte',
+        body,
+        silent: false,
+      });
+      n.on('click', () => {
+        const all = BrowserWindow.getAllWindows().filter(
+          (w) => !w.webContents.getURL().includes('/popup/'),
+        );
+        const main = all[0];
+        if (main) {
+          if (main.isMinimized()) main.restore();
+          main.show();
+          main.focus();
+        }
+      });
+      n.show();
+    },
+  );
 }
