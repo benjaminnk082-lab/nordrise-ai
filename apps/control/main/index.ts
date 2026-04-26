@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mainWindowOptions } from './windows.js';
 import { registerIpc } from './ipc.js';
+import { initTray, setTrayStatus } from './tray.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -26,9 +27,21 @@ async function createMainWindow() {
   mainWin.on('closed', () => { mainWin = null; });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   registerIpc();
-  return createMainWindow();
+  await createMainWindow();
+  initTray(() => mainWin);
+  setInterval(async () => {
+    try {
+      const url = process.env.NORDRISE_BACKEND_URL ?? 'https://sean-production-4fcf.up.railway.app';
+      const r = await fetch(`${url}/healthz`);
+      const body = (await r.json()) as { authMode?: string; db?: string };
+      if (r.status === 200 && body.authMode === 'subscription' && body.db === 'ok') setTrayStatus('green');
+      else setTrayStatus('yellow');
+    } catch {
+      setTrayStatus('red');
+    }
+  }, 30_000);
 });
 
 app.on('window-all-closed', () => {
