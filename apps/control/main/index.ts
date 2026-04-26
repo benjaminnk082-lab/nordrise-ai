@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mainWindowOptions } from './windows.js';
+import { registerIpc } from './ipc.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -25,7 +26,10 @@ async function createMainWindow() {
   mainWin.on('closed', () => { mainWin = null; });
 }
 
-app.whenReady().then(createMainWindow);
+app.whenReady().then(() => {
+  registerIpc();
+  return createMainWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
