@@ -29,6 +29,12 @@ import {
   startExpirationSweep,
 } from './api/control/suggestionsGenerator.js';
 import { startInboxCleanupInterval } from './api/control/inboxCleanup.js';
+import { makeProactiveRouter } from './api/control/proactiveRoute.js';
+import {
+  startProactiveEngine,
+  stopProactiveEngine,
+  type ProactiveDeps,
+} from './api/control/proactiveEngine.js';
 
 const app = express();
 
@@ -142,11 +148,32 @@ controlRouter.use(
     allowedTokens: controlTokens,
   }),
 );
-// Suggestion queue — Sean's autonomous proposals.
-controlRouter.use(makeSuggestionsRouter({ prisma, allowedTokens: controlTokens }));
+// Suggestion queue — Sean's autonomous proposals. The bot + benjaminTelegramId
+// hooks up the "🔧 Jobber med forslag: …" status message when an approval
+// kicks off execution.
+controlRouter.use(
+  makeSuggestionsRouter({
+    prisma,
+    allowedTokens: controlTokens,
+    bot,
+    benjaminTelegramId,
+  }),
+);
 // Persona endpoint — desktop client fetches Sean's persona to inject as the
 // system prompt when routing a thread through Ollama (cross-model identity).
 controlRouter.use(makeControlPersonaRouter({ allowedTokens: controlTokens }));
+// Proactive engine — Sean's cron-driven autonomous Telegram outreach. The
+// engineDeps below are shared between the cron and /run-now so a manual
+// trigger goes through the exact same guardrail stack.
+const proactiveDeps: ProactiveDeps = {
+  prisma,
+  bot,
+  benjaminTelegramId,
+  envDisabled: process.env.PROACTIVE_DISABLED === 'true',
+};
+controlRouter.use(
+  makeProactiveRouter({ prisma, engineDeps: proactiveDeps, allowedTokens: controlTokens }),
+);
 app.use('/control', controlRouter);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
@@ -172,6 +199,14 @@ async function main() {
   }
   const expirationSweep = startExpirationSweep(prisma);
   const cleanupTimer = startInboxCleanupInterval(inboxDir);
+
+  // Proactive engine — best-effort. PROACTIVE_DISABLED=true skips the cron;
+  // any other failure is logged and the rest of the gateway still boots.
+  try {
+    await startProactiveEngine(proactiveDeps);
+  } catch (err) {
+    logger.error({ err }, 'proactive engine failed to start (continuing)');
+  }
 
   // Periodic codebase pull. The boot-time clone happens in
   // docker-entrypoint.sh; this runtime tick keeps Sean's reference fresh
@@ -202,6 +237,7 @@ async function main() {
     clearInterval(expirationSweep);
     clearInterval(codebasePullTimer);
     stopSuggestionsGenerator();
+    stopProactiveEngine();
     server.close(() => {
       void prisma.$disconnect().finally(() => process.exit(0));
     });

@@ -115,3 +115,36 @@ model Suggestion {
   @@index([status, expiresAt])
   @@index([createdAt])
 }
+
+/// Audit trail of every proactive engine tick. Every cron evaluation lands
+/// here regardless of whether Sean ended up sending — `decision` distinguishes
+/// the outcome (sent / skipped / rate_limited / quiet_hours / disabled). The
+/// `category` taxonomy mirrors the JSON output of the meta-prompt.
+model ProactiveAttempt {
+  id          String   @id @default(cuid())
+  triggeredAt DateTime @default(now())
+  decision    String   // 'sent' | 'skipped' | 'rate_limited' | 'quiet_hours' | 'disabled'
+  reason      String?  @db.Text
+  message     String?  @db.Text
+  category    String?  // 'question' | 'status' | 'idea' | 'observation' | 'check-in'
+  costUsd     Float?
+
+  @@index([triggeredAt])
+  @@index([decision, triggeredAt])
+}
+
+/// Singleton row controlling the proactive engine's runtime behaviour.
+/// `enabled=false` is the soft kill; PROACTIVE_DISABLED env is the hard kill.
+/// Quiet hours: `quietHourStart` is inclusive, `quietHourEnd` is exclusive
+/// (start=22, end=8 means hours 22, 23, 0..7 are quiet). Rate limits are per
+/// rolling-hour and rolling-day windows.
+model ProactiveSettings {
+  id              String   @id @default(cuid())
+  enabled         Boolean  @default(true)
+  quietHourStart  Int      @default(22)
+  quietHourEnd    Int      @default(8)
+  maxPerHour      Int      @default(3)
+  maxPerDay       Int      @default(10)
+  cadenceMin      Int      @default(15)
+  updatedAt       DateTime @updatedAt
+}

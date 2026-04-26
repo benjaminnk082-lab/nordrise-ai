@@ -19,9 +19,21 @@
 
 import * as cron from 'node-cron';
 import type { PrismaClient } from '@prisma/client';
+import type { Bot } from 'grammy';
 import { z } from 'zod';
 import { ClaudeBridge } from '../../claudeBridge.js';
 import { logger } from '../../logger.js';
+
+/**
+ * Optional Telegram-notification deps for `executeApproved`. When provided
+ * we post "🔧 Jobber med forslag: <title>" to Benjamin at start so the
+ * proactive feel extends to suggestion executions. Best-effort — never
+ * throws.
+ */
+export interface ExecuteNotifyDeps {
+  bot: Pick<Bot, 'api'>;
+  benjaminTelegramId: bigint;
+}
 
 const SUGGESTION_META_PROMPT = `Du er Sean i refleksjonsmodus. Du er IKKE i samtale med Benjamin nå — du analyserer kontekst og genererer valgfrie forslag til ting du KUNNE gjort som ville vært nyttige.
 
@@ -201,9 +213,22 @@ export async function executeApproved(
   prisma: PrismaClient,
   suggestionId: string,
   makeBridge: () => ClaudeBridge = () => new ClaudeBridge(),
+  notify?: ExecuteNotifyDeps,
 ): Promise<void> {
   const s = await prisma.suggestion.findUnique({ where: { id: suggestionId } });
   if (!s || s.status !== 'approved') return;
+
+  // Status heads-up. Same "Sean is at work" pattern as routines. Best-effort.
+  if (notify) {
+    try {
+      await notify.bot.api.sendMessage(
+        Number(notify.benjaminTelegramId),
+        `🔧 Jobber med forslag: ${s.title}`,
+      );
+    } catch (err) {
+      logger.warn({ err, suggestionId: s.id }, 'suggestion telegram start-notify failed');
+    }
+  }
 
   const started = Date.now();
   try {

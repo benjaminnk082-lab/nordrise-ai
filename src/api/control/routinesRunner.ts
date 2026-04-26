@@ -72,6 +72,18 @@ export async function runOnce(routineId: string, deps: RunnerDeps): Promise<void
   const run = await deps.prisma.routineRun.create({
     data: { routineId: r.id, status: 'running' },
   });
+  // Start-of-run Telegram heads-up so Sean feels like a 24/7 employee.
+  // Best-effort — a failure here must not abort the routine itself.
+  if (r.channel === 'telegram' || r.channel === 'both') {
+    try {
+      await deps.bot.api.sendMessage(
+        Number(deps.benjaminTelegramId),
+        `🔧 Starter routine: ${r.name}`,
+      );
+    } catch (err) {
+      logger.warn({ err, routineId: r.id }, 'routine telegram start-notify failed');
+    }
+  }
   const started = Date.now();
   try {
     const bridge = new ClaudeBridge();

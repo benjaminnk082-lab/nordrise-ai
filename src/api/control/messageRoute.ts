@@ -150,12 +150,23 @@ async function handle(req: Request, res: Response, deps: MessageRouterDeps): Pro
     return;
   }
 
-  let prompt = body.text;
+  // Obsidian-as-brain: when this is the very first message of a thread
+  // (no claudeSessionId yet), inject a tiny system-style priming note that
+  // tells Sean to load his vault memory before answering. Persona explains
+  // the contract; this just guarantees the read happens up-front instead
+  // of silently being skipped.
+  let priming = '';
+  if (!session.claudeSessionId) {
+    priming =
+      '[System: Dette er en ny samtale. Les vault/Sean/MEMORY.md først (hvis finnes) for å frem-laste konteksten din.]\n\n';
+  }
+
+  let prompt = priming + body.text;
   if (body.attachments?.length) {
     const lines = body.attachments
       .map((a) => `[Vedlegg tilgjengelig: ${a.workspacePath}]`)
       .join('\n');
-    prompt = `${body.text}\n\n${lines}`;
+    prompt = `${priming}${body.text}\n\n${lines}`;
   }
 
   await deps.mgr.recordMessage({

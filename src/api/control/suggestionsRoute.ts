@@ -9,12 +9,20 @@
 
 import { Router } from 'express';
 import type { PrismaClient, Suggestion } from '@prisma/client';
+import type { Bot } from 'grammy';
 import { makeRequireControlToken } from './auth.js';
-import { executeApproved, generateOnce } from './suggestionsGenerator.js';
+import {
+  executeApproved,
+  generateOnce,
+  type ExecuteNotifyDeps,
+} from './suggestionsGenerator.js';
 
 export interface SuggestionsRouterDeps {
   prisma: PrismaClient;
   allowedTokens: readonly string[];
+  /** When set, executeApproved posts a "🔧 Jobber med forslag…" Telegram. */
+  bot?: Pick<Bot, 'api'>;
+  benjaminTelegramId?: bigint;
 }
 
 export function makeSuggestionsRouter(deps: SuggestionsRouterDeps): Router {
@@ -41,7 +49,11 @@ export function makeSuggestionsRouter(deps: SuggestionsRouterDeps): Router {
       });
       res.json(toSummary(s));
       // Fire-and-forget — handler awaits its own DB writes.
-      void executeApproved(deps.prisma, id);
+      const notify: ExecuteNotifyDeps | undefined =
+        deps.bot && deps.benjaminTelegramId !== undefined
+          ? { bot: deps.bot, benjaminTelegramId: deps.benjaminTelegramId }
+          : undefined;
+      void executeApproved(deps.prisma, id, undefined, notify);
     } catch {
       res.status(404).json({ error: 'not_found' });
     }

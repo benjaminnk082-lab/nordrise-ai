@@ -138,4 +138,42 @@ describe('routinesRunner', () => {
     expect(cron.validate('*/5 * * * *')).toBe(true);
     expect(cron.validate('not a cron')).toBe(false);
   });
+
+  it('posts a "🔧 Starter routine" Telegram heads-up when channel is telegram', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const bot = { api: { sendMessage } } as unknown as Parameters<typeof runOnce>[1]['bot'];
+    const r = await prisma.routine.create({
+      data: {
+        name: 'Morgen-tg',
+        prompt: 'noop',
+        schedule: '0 9 * * *',
+        channel: 'telegram',
+      },
+    });
+
+    await runOnce(r.id, { prisma, bot, benjaminTelegramId: 999n });
+
+    // Two messages: starter + completion. Both go to chatId=999.
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    const calls = sendMessage.mock.calls.map((c: unknown[]) => c[1] as string);
+    expect(calls[0]).toMatch(/^🔧 Starter routine: Morgen-tg/);
+    expect(calls[1]).toMatch(/^📋 Routine "Morgen-tg":/);
+  });
+
+  it('does NOT post a starter heads-up when channel=desktop', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const bot = { api: { sendMessage } } as unknown as Parameters<typeof runOnce>[1]['bot'];
+    const r = await prisma.routine.create({
+      data: {
+        name: 'Stille',
+        prompt: 'noop',
+        schedule: '0 9 * * *',
+        channel: 'desktop',
+      },
+    });
+
+    await runOnce(r.id, { prisma, bot, benjaminTelegramId: 999n });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
 });
