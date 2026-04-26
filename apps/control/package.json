@@ -1,6 +1,6 @@
 {
   "name": "nordrise-control",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "description": "Nordrise Control — Sean desktop client.",
   "main": "dist/main/index.js",

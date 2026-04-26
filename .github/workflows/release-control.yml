@@ -14,18 +14,44 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+
       - name: Install root deps + sync types
         run: |
           npm ci --no-audit --no-fund
           npm run sync-control-types
+
       - name: Install client deps
         working-directory: apps/control
         run: npm ci --no-audit --no-fund
+
       - name: Build client
         working-directory: apps/control
         run: npm run build
+
       - name: Package + publish
         working-directory: apps/control
         run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # electron-builder sometimes leaves the GitHub Release as a draft despite
+      # `releaseType: release`. Force-publish so electron-updater (which only
+      # sees published releases) can find it on next launch.
+      - name: Ensure release is published (not draft)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          Write-Host "Ensuring release for tag $tag is published..."
+          $info = gh release view $tag --json isDraft,isPrerelease,name 2>$null | ConvertFrom-Json
+          if ($null -eq $info) {
+            Write-Host "No release found for $tag (electron-builder may not have created one). Skipping."
+            exit 0
+          }
+          if ($info.isDraft -or $info.isPrerelease) {
+            Write-Host "Release is draft=$($info.isDraft), prerelease=$($info.isPrerelease) — publishing..."
+            gh release edit $tag --draft=false --prerelease=false
+          } else {
+            Write-Host "Release already published."
+          }

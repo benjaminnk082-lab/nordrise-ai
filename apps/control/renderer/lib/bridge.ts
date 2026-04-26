@@ -21,3 +21,11 @@ export async function getBackendUrl(): Promise<string> {
 export async function pingHealthz(): Promise<{ status: number; body: unknown; error?: string }> {
   return window.nordrise.invoke('healthz');
 }
+
+export async function getAppVersion(): Promise<string> {
+  return window.nordrise.invoke<string>('app:version');
+}
+
+export async function getPendingUpdate(): Promise<string | null> {
+  return window.nordrise.invoke<string | null>('app:pending-update');
+}

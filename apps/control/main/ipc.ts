@@ -1,5 +1,6 @@
-import { ipcMain, net } from 'electron';
+import { ipcMain, net, app } from 'electron';
 import { setToken, getToken, deleteToken } from './keychain.js';
+import { getPendingUpdateVersion } from './autoUpdate.js';
 
 const DEFAULT_BACKEND = 'https://sean-production-4fcf.up.railway.app';
 const TOKEN_SLOT = 'bearer';
@@ -12,6 +13,9 @@ async function netFetch(url: string, init?: RequestInit): Promise<Response> {
 }
 
 export function registerIpc(): void {
+  ipcMain.handle('app:version', () => app.getVersion());
+  ipcMain.handle('app:pending-update', () => getPendingUpdateVersion());
+
   ipcMain.handle('auth:get-token', () => getToken(TOKEN_SLOT));
   ipcMain.handle('auth:set-token', (_e, token: string) => setToken(TOKEN_SLOT, token));
   ipcMain.handle('auth:clear-token', () => deleteToken(TOKEN_SLOT));

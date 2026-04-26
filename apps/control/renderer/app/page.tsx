@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { TokenLogin } from '../components/TokenLogin';
-import { getStoredToken, clearStoredToken } from '../lib/bridge';
+import { getStoredToken, clearStoredToken, getAppVersion, getPendingUpdate } from '../lib/bridge';
 
 type Phase =
   | { kind: 'loading' }
@@ -10,10 +10,22 @@ type Phase =
 
 export default function Page() {
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
+  const [version, setVersion] = useState<string>('');
+  const [pendingUpdate, setPendingUpdate] = useState<string | null>(null);
 
   useEffect(() => {
     getStoredToken().then((tok) => setPhase(tok ? { kind: 'app', token: tok } : { kind: 'login' }));
+    getAppVersion().then(setVersion);
   }, []);
+
+  // Poll for downloaded updates every 30s while on the app screen.
+  useEffect(() => {
+    if (phase.kind !== 'app') return;
+    const tick = () => { void getPendingUpdate().then(setPendingUpdate); };
+    tick();
+    const t = setInterval(tick, 30_000);
+    return () => clearInterval(t);
+  }, [phase.kind]);
 
   async function logout() {
     await clearStoredToken();
@@ -44,11 +56,18 @@ export default function Page() {
         <p className="mt-3 text-[14px] text-white/55 leading-relaxed">
           Chat-grensesnittet kommer i neste oppdatering.
         </p>
+
+        {pendingUpdate && (
+          <div className="mt-5 rounded-xl border border-[#7c5cff]/30 bg-[#7c5cff]/10 px-4 py-2.5 text-[12px] text-[#c4b0ff]">
+            Versjon {pendingUpdate} klar — installeres når du lukker appen.
+          </div>
+        )}
+
         <div className="hairline my-6" />
-        <div className="flex items-center justify-center gap-2 text-[11px] text-white/35 tracking-wide uppercase">
-          <span>Klar for M3</span>
+        <div className="flex items-center justify-center gap-2 text-[11px] text-white/35 tracking-wide">
+          <span className="uppercase">v{version || '?'}</span>
           <span className="opacity-50">·</span>
-          <button onClick={logout} className="ghost-btn !p-0 !text-[11px] !uppercase tracking-wide">Logg ut</button>
+          <button onClick={logout} className="ghost-btn !p-0 !text-[11px] tracking-wide">Logg ut</button>
         </div>
       </div>
     </main>
