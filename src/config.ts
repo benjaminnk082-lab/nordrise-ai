@@ -34,6 +34,8 @@ const schema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
 
   WORKSPACE_DIR: z.string().default('/app/workspace'),
+
+  CONTROL_API_TOKENS: z.string().default(''),
 });
 
 function mustNotHaveAnthropicApiKey() {
@@ -55,3 +57,13 @@ if (!parsed.success) {
 
 export const config = parsed.data;
 export type Config = typeof config;
+
+export function parseControlTokens(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+}
+
+export const controlTokens = parseControlTokens(config.CONTROL_API_TOKENS);

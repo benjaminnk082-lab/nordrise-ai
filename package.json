@@ -17,6 +17,7 @@
     "bridge-repl": "tsx scripts/bridge-repl.ts",
     "set-webhook": "tsx scripts/set-webhook.ts",
     "gen-secret": "tsx scripts/gen-webhook-secret.ts",
+    "issue-control-token": "tsx scripts/issue-control-token.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:migrate:dev": "prisma migrate dev",
