@@ -1,0 +1,111 @@
+/**
+ * settingsStore.ts — small JSON-backed app-settings store.
+ *
+ * A separate file (settings.json) under app.getPath('userData') is simpler than
+ * sharing the better-sqlite3 instance with quick-tasks: settings is read on
+ * almost every send, atomic writes via fs.writeFileSync are good enough at
+ * this volume, and we don't want a schema migration if the shape evolves.
+ */
+import { app } from 'electron';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+
+export type ClaudeModelId =
+  | 'claude-opus-4-7'
+  | 'claude-sonnet-4-6'
+  | 'claude-haiku-4-5';
+
+/**
+ * Selected default model. `auto` enables the routing heuristic in the renderer.
+ * Per-thread overrides live in `perThreadModel` (keyed by control session id)
+ * and may also hold the synthetic `ollama:<model>` form.
+ */
+export type DefaultModelChoice = ClaudeModelId | 'auto';
+
+export interface AppSettings {
+  defaultModel: DefaultModelChoice;
+  ollamaEnabled: boolean;
+  ollamaHost: string;
+  /** When auto-routing, prefer Ollama for messages classified "simple". */
+  preferOllamaForSimple: boolean;
+  ollamaModel: string;
+  /** controlSessionId -> model id (Claude id, "auto", or "ollama:<name>"). */
+  perThreadModel: Record<string, string>;
+  theme: 'dark';
+}
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  defaultModel: 'auto',
+  ollamaEnabled: false,
+  ollamaHost: 'http://localhost:11434',
+  preferOllamaForSimple: false,
+  ollamaModel: '',
+  perThreadModel: {},
+  theme: 'dark',
+};
+
+let cached: AppSettings | null = null;
+let pathCache: string | null = null;
+
+function settingsPath(): string {
+  if (pathCache) return pathCache;
+  pathCache = join(app.getPath('userData'), 'settings.json');
+  return pathCache;
+}
+
+function load(): AppSettings {
+  if (cached) return cached;
+  const file = settingsPath();
+  if (!existsSync(file)) {
+    cached = { ...DEFAULT_SETTINGS };
+    return cached;
+  }
+  try {
+    const raw = readFileSync(file, 'utf8');
+    const parsed = JSON.parse(raw) as Partial<AppSettings>;
+    // Merge with defaults so unknown / missing fields fall back gracefully.
+    cached = {
+      ...DEFAULT_SETTINGS,
+      ...parsed,
+      perThreadModel: {
+        ...DEFAULT_SETTINGS.perThreadModel,
+        ...(parsed.perThreadModel ?? {}),
+      },
+    };
+    return cached;
+  } catch {
+    // Corrupt file — fall back to defaults rather than crash the app.
+    cached = { ...DEFAULT_SETTINGS };
+    return cached;
+  }
+}
+
+function persist(settings: AppSettings): void {
+  const file = settingsPath();
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify(settings, null, 2), 'utf8');
+}
+
+export function getSettings(): AppSettings {
+  return load();
+}
+
+export function setSettings(patch: Partial<AppSettings>): AppSettings {
+  const next: AppSettings = {
+    ...load(),
+    ...patch,
+    perThreadModel: {
+      ...load().perThreadModel,
+      ...(patch.perThreadModel ?? {}),
+    },
+  };
+  cached = next;
+  persist(next);
+  return next;
+}
+
+export function resetSettings(): AppSettings {
+  cached = { ...DEFAULT_SETTINGS };
+  persist(cached);
+  return cached;
+}

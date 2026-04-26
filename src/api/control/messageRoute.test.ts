@@ -9,8 +9,10 @@ import { ControlSessionManager } from '../../controlSessionManager.js';
 const prisma = new PrismaClient();
 
 class FakeBridge extends EventEmitter {
+  public lastInvoke: { message: string; sessionId?: string | null; model?: string } | null = null;
   constructor(private readonly behaviour: 'success' | 'rate_limit') { super(); }
-  async invoke(opts: { message: string; sessionId?: string | null }) {
+  async invoke(opts: { message: string; sessionId?: string | null; model?: string }) {
+    this.lastInvoke = opts;
     setTimeout(() => this.emit('thinking'), 1);
     setTimeout(() => this.emit('sessionId', 'claude-uuid-1'), 2);
     setTimeout(() => this.emit('partial', 'hei '), 3);
@@ -34,12 +36,13 @@ function buildApp(behaviour: 'success' | 'rate_limit') {
   const mgr = new ControlSessionManager(prisma);
   const bridge = new FakeBridge(behaviour);
   app.use('/control', makeControlMessageRouter({ mgr, makeBridge: () => bridge as any, allowedTokens: ['t1'] }));
-  return app;
+  return { app, bridge };
 }
 
 describe('POST /control/message', () => {
   it('streams partial → done frames on success', async () => {
-    const res = await request(buildApp('success'))
+    const { app } = buildApp('success');
+    const res = await request(app)
       .post('/control/message')
       .set('Authorization', 'Bearer t1')
       .send({ controlSessionId: null, text: 'hei' })
@@ -59,7 +62,8 @@ describe('POST /control/message', () => {
     expect(messages.map((m) => m.role).sort()).toEqual(['assistant', 'user']);
   });
   it('emits SSE error frame when rate-limited', async () => {
-    const res = await request(buildApp('rate_limit'))
+    const { app } = buildApp('rate_limit');
+    const res = await request(app)
       .post('/control/message')
       .set('Authorization', 'Bearer t1')
       .send({ controlSessionId: null, text: 'hei' })
@@ -73,9 +77,32 @@ describe('POST /control/message', () => {
     expect(String(res.body)).toContain('rate_limit');
   });
   it('rejects without bearer token', async () => {
-    const res = await request(buildApp('success'))
+    const { app } = buildApp('success');
+    const res = await request(app)
       .post('/control/message')
       .send({ controlSessionId: null, text: 'hei' });
     expect(res.status).toBe(401);
+  });
+  it('honors the model param when present', async () => {
+    const { app, bridge } = buildApp('success');
+    await request(app)
+      .post('/control/message')
+      .set('Authorization', 'Bearer t1')
+      .send({ controlSessionId: null, text: 'hei', model: 'claude-haiku-4-5' })
+      .buffer(true)
+      .parse((res, cb) => {
+        let data = '';
+        res.on('data', (c) => (data += c.toString()));
+        res.on('end', () => cb(null, data));
+      });
+    expect(bridge.lastInvoke?.model).toBe('claude-haiku-4-5');
+  });
+  it('rejects an unknown model value', async () => {
+    const { app } = buildApp('success');
+    const res = await request(app)
+      .post('/control/message')
+      .set('Authorization', 'Bearer t1')
+      .send({ controlSessionId: null, text: 'hei', model: 'gpt-4' });
+    expect(res.status).toBe(400);
   });
 });

@@ -3,6 +3,13 @@ import { setToken, getToken, deleteToken } from './keychain.js';
 import { getPendingUpdateVersion, quitAndInstall } from './autoUpdate.js';
 import { getStore, type QuickTaskInput } from './store.js';
 import { hidePopup } from './popup.js';
+import {
+  getSettings,
+  setSettings,
+  resetSettings,
+  type AppSettings,
+} from './settingsStore.js';
+import { detectOllama, listOllamaModels, streamOllama } from './ollama.js';
 
 const DEFAULT_BACKEND = 'https://sean-production-4fcf.up.railway.app';
 const TOKEN_SLOT = 'bearer';
@@ -27,6 +34,15 @@ interface StreamStartPayload {
   text: string;
   controlSessionId: string | null;
   attachments?: Array<{ fileId: string; workspacePath: string; filename: string }>;
+  /** Optional Claude model override forwarded to the backend. */
+  model?: string;
+}
+
+interface OllamaStreamStartPayload {
+  streamId: string;
+  prompt: string;
+  model: string;
+  controlSessionId: string | null;
 }
 
 export function registerIpc(): void {
@@ -157,6 +173,7 @@ export function registerIpc(): void {
           controlSessionId: payload.controlSessionId,
           text: payload.text,
           attachments: payload.attachments,
+          ...(payload.model ? { model: payload.model } : {}),
         }),
         signal: ac.signal,
       });
@@ -224,6 +241,116 @@ export function registerIpc(): void {
       getStore().update(p.id, p.patch),
   );
   ipcMain.handle('qt:delete', (_e, id: string) => getStore().delete(id));
+
+  // App settings (model preferences, Ollama config) — JSON-backed.
+  ipcMain.handle('settings:get', () => getSettings());
+  ipcMain.handle('settings:set', (_e, patch: Partial<AppSettings>) =>
+    setSettings(patch),
+  );
+  ipcMain.handle('settings:reset', () => resetSettings());
+
+  // Ollama (localhost only)
+  ipcMain.handle('ollama:detect', (_e, host: string) => detectOllama(host));
+  ipcMain.handle('ollama:list-models', (_e, host: string) =>
+    listOllamaModels(host),
+  );
+  ipcMain.handle(
+    'ollama:stream-start',
+    async (e, payload: OllamaStreamStartPayload) => {
+      const settings = getSettings();
+      const host = settings.ollamaHost || 'http://localhost:11434';
+      const channel = `control:stream-event:${payload.streamId}`;
+      const ac = new AbortController();
+      activeStreams.set(payload.streamId, ac);
+
+      // Surface a "session" frame mirror so the renderer's existing useStream
+      // bookkeeping still runs (controlSessionId is what it ultimately cares
+      // about). claudeSessionId is left empty since Sean isn't involved.
+      if (payload.controlSessionId) {
+        e.sender.send(channel, {
+          event: 'session',
+          data: {
+            claudeSessionId: '',
+            controlSessionId: payload.controlSessionId,
+          },
+        });
+      }
+      e.sender.send(channel, { event: 'thinking', data: { at: Date.now() } });
+
+      let fullResponse = '';
+      const startedAt = Date.now();
+      let errored = false;
+
+      try {
+        await streamOllama({
+          host,
+          model: payload.model,
+          prompt: payload.prompt,
+          signal: ac.signal,
+          onChunk: (text) => {
+            fullResponse += text;
+            e.sender.send(channel, { event: 'partial', data: { text } });
+          },
+          onError: (message) => {
+            errored = true;
+            e.sender.send(channel, { event: 'error', data: { message } });
+          },
+          onDone: () => {
+            // handled in finally
+          },
+        });
+
+        if (!errored) {
+          e.sender.send(channel, {
+            event: 'done',
+            data: {
+              durationMs: Date.now() - startedAt,
+              costUsdInformational: 0,
+              isError: false,
+            },
+          });
+
+          // Persist user prompt + assistant reply via the new backend
+          // endpoint so the conversation shows up in normal history queries.
+          if (payload.controlSessionId && fullResponse.trim()) {
+            const token = await getToken(TOKEN_SLOT);
+            if (token) {
+              const backend =
+                process.env.NORDRISE_BACKEND_URL ?? DEFAULT_BACKEND;
+              const post = (role: 'user' | 'assistant', content: string) =>
+                netFetch(
+                  `${backend}/control/sessions/${payload.controlSessionId}/messages`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      role,
+                      content,
+                      model: `ollama:${payload.model}`,
+                    }),
+                  },
+                ).catch(() => null);
+              await post('user', payload.prompt);
+              await post('assistant', fullResponse);
+            }
+          }
+        }
+      } finally {
+        activeStreams.delete(payload.streamId);
+        e.sender.send(channel, { event: 'done-stream', data: {} });
+      }
+    },
+  );
+  ipcMain.handle('ollama:stream-abort', (_e, streamId: string) => {
+    const ac = activeStreams.get(streamId);
+    if (ac) {
+      ac.abort();
+      activeStreams.delete(streamId);
+    }
+  });
 
   // Mini-popup lifecycle + reply-toast
   ipcMain.handle('popup:close', () => {

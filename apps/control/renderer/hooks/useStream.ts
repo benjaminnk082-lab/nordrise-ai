@@ -31,12 +31,14 @@ export function useStream(callbacks: UseStreamCallbacks) {
       controlSessionId: string | null;
       text: string;
       attachments?: Array<{ fileId: string; workspacePath: string; filename: string }>;
+      model?: string;
     }) => {
       if (handleRef.current) handleRef.current.abort();
       const handle = sendMessageStream({
         controlSessionId: opts.controlSessionId,
         text: opts.text,
         attachments: opts.attachments,
+        ...(opts.model ? { model: opts.model } : {}),
         onFrame: (f: SseFrame) => {
           const cb = cbRef.current;
           switch (f.event) {

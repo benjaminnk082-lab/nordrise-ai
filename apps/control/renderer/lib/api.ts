@@ -97,6 +97,12 @@ export interface SendOpts {
   controlSessionId: string | null;
   text: string;
   attachments?: Array<{ fileId: string; workspacePath: string; filename: string }>;
+  /**
+   * Optional model id. Either a Claude model (claude-opus-4-7 etc.) — which
+   * is forwarded to Sean — or `ollama:<modelName>`, which is routed locally
+   * via the Ollama IPC bridge and bypasses Sean entirely.
+   */
+  model?: string;
   onFrame: (f: SseFrame) => void;
   onDone: () => void;
 }
@@ -113,11 +119,29 @@ export function sendMessageStream(opts: SendOpts): { abort: () => void } {
     }
     opts.onFrame(f);
   });
+
+  if (opts.model && opts.model.startsWith('ollama:')) {
+    const ollamaModel = opts.model.slice('ollama:'.length);
+    void window.nordrise.invoke('ollama:stream-start', {
+      streamId,
+      prompt: opts.text,
+      model: ollamaModel,
+      controlSessionId: opts.controlSessionId,
+    });
+    return {
+      abort: () => {
+        void window.nordrise.invoke('ollama:stream-abort', streamId);
+        off();
+      },
+    };
+  }
+
   void window.nordrise.invoke('control:stream-start', {
     streamId,
     text: opts.text,
     controlSessionId: opts.controlSessionId,
     attachments: opts.attachments,
+    model: opts.model,
   });
   return {
     abort: () => {

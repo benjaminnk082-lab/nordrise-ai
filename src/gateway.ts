@@ -33,16 +33,30 @@ app.use(
 
 app.get('/healthz', async (_req, res) => {
   let db: 'ok' | 'error' = 'ok';
+  let recentMessageCount: number | null = null;
   try {
     await prisma.$queryRaw`SELECT 1`;
   } catch {
     db = 'error';
+  }
+  if (db === 'ok') {
+    try {
+      const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000);
+      recentMessageCount = await prisma.message.count({
+        where: { createdAt: { gt: fiveHoursAgo } },
+      });
+    } catch {
+      // Non-fatal — leave recentMessageCount=null and let the renderer
+      // gracefully say "ukjent".
+      recentMessageCount = null;
+    }
   }
   res.json({
     status: db === 'ok' ? 'ok' : 'degraded',
     authMode: 'subscription',
     db,
     uptimeSec: Math.floor(process.uptime()),
+    recentMessageCount,
     service: 'nordrise-ai',
   });
 });

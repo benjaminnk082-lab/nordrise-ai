@@ -10,10 +10,25 @@ export type SseEvent =
   | { event: 'error'; data: { message: string; retryAfterMs?: number } }
   | { event: 'heartbeat'; data: Record<string, never> };
 
+export type ClaudeModelId =
+  | 'claude-opus-4-7'
+  | 'claude-sonnet-4-6'
+  | 'claude-haiku-4-5';
+
 export interface ControlMessageRequest {
   controlSessionId: string | null;
   text: string;
   attachments?: Array<{ fileId: string; workspacePath: string; filename: string }>;
+  model?: ClaudeModelId;
+}
+
+export interface HealthzResponse {
+  status: 'ok' | 'degraded';
+  authMode: 'subscription';
+  db: 'ok' | 'error';
+  uptimeSec: number;
+  recentMessageCount: number | null;
+  service: 'nordrise-ai';
 }
 
 export interface ControlSessionSummary {

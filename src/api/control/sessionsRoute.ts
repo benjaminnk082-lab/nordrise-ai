@@ -6,6 +6,13 @@ import { makeRequireControlToken } from './auth.js';
 import type { ControlSessionSummary, ControlMessageRow } from './types.js';
 
 const RenameBody = z.object({ title: z.string().min(1).max(120) });
+const MessageBody = z.object({
+  role: z.enum(['user', 'assistant', 'system']),
+  content: z.string().min(1).max(40_000),
+  // Informational only — model isn't persisted yet (no column), but we
+  // accept it so the renderer can send it without breakage.
+  model: z.string().optional(),
+});
 
 export interface SessionsRouterDeps {
   mgr: ControlSessionManager;
@@ -55,6 +62,34 @@ export function makeControlSessionsRouter(deps: SessionsRouterDeps): Router {
 
   r.post('/sessions/:id/archive', auth, async (req, res) => {
     await deps.mgr.archive(req.params.id!);
+    res.json({ ok: true });
+  });
+
+  // Manual message-persistence — used by the desktop app when a thread is
+  // routed through Ollama (bypassing Sean) so the conversation still
+  // ends up in the same DB and can be queried alongside Sean's history.
+  r.post('/sessions/:id/messages', auth, async (req, res) => {
+    const parsed = MessageBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'invalid_body' });
+      return;
+    }
+    // Verify the session exists so we don't silently leak orphan rows.
+    const exists = await deps.prisma.controlSession.findUnique({
+      where: { id: req.params.id! },
+    });
+    if (!exists) {
+      res.status(404).json({ error: 'session_not_found' });
+      return;
+    }
+    await deps.prisma.message.create({
+      data: {
+        controlSessionId: req.params.id!,
+        role: parsed.data.role,
+        content: parsed.data.content,
+      },
+    });
+    await deps.mgr.touch(req.params.id!);
     res.json({ ok: true });
   });
 

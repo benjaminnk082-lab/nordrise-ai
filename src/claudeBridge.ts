@@ -32,6 +32,13 @@ export interface ClaudeBridgeResult {
 export interface ClaudeBridgeOptions {
   message: string;
   sessionId?: string | null;
+  /**
+   * Optional Claude model identifier passed as `--model` to the CLI.
+   * Accepted values include the canonical names like `claude-opus-4-7`,
+   * `claude-sonnet-4-6`, `claude-haiku-4-5`, or short aliases like `opus`.
+   * When omitted the CLI uses its default.
+   */
+  model?: string;
   signal?: AbortSignal;
 }
 
@@ -107,6 +114,7 @@ export class ClaudeBridge extends EventEmitter {
     const persona = await this.loadPrompt();
     const args = ['-p', opts.message, '--output-format', 'stream-json', '--verbose'];
     if (opts.sessionId) args.push('--resume', opts.sessionId);
+    if (opts.model) args.push('--model', opts.model);
     if (persona.trim()) args.push('--append-system-prompt', persona);
 
     const started = Date.now();

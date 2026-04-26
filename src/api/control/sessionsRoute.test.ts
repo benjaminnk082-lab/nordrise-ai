@@ -52,6 +52,25 @@ describe('control sessions + history', () => {
     expect(msgs.body.messages).toHaveLength(1);
     expect(msgs.body.messages[0].source).toBe('desktop');
   });
+  it('persists a manually posted message via POST /sessions/:id/messages', async () => {
+    const created = await prisma.controlSession.create({ data: { title: 'M' } });
+    const res = await request(app())
+      .post(`/control/sessions/${created.id}/messages`)
+      .set('Authorization', 'Bearer t1')
+      .send({ role: 'user', content: 'fra ollama', model: 'qwen2.5-coder:14b' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    const rows = await prisma.message.findMany({ where: { controlSessionId: created.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.role).toBe('user');
+  });
+  it('returns 404 when posting to missing session', async () => {
+    const res = await request(app())
+      .post('/control/sessions/missing/messages')
+      .set('Authorization', 'Bearer t1')
+      .send({ role: 'user', content: 'x' });
+    expect(res.status).toBe(404);
+  });
   it('returns telegram messages with source=telegram', async () => {
     const tg = await prisma.session.create({ data: { telegramChatId: BigInt(7341469970) } });
     await prisma.message.create({ data: { sessionId: tg.id, role: 'user', content: 'tg-hi' } });

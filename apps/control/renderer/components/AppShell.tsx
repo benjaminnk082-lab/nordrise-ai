@@ -10,7 +10,15 @@ import { ThinkingPanel } from './ThinkingPanel';
 import { TelegramHistory } from './TelegramHistory';
 import { QuickTaskPalette } from './QuickTaskPalette';
 import { QuickTaskManager } from './QuickTaskManager';
+import { SettingsModal } from './SettingsModal';
 import { quitAndInstall, getPendingUpdate } from '../lib/bridge';
+import {
+  settingsApi,
+  ollamaApi,
+  DEFAULT_SETTINGS,
+  type AppSettings,
+} from '../lib/settings';
+import { pickModel } from '../lib/routing';
 
 export interface AppShellProps {
   version: string;
@@ -38,6 +46,29 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [ollamaAvailable, setOllamaAvailable] = useState(false);
+
+  // Hydrate settings on mount, and re-detect Ollama whenever the host /
+  // enabled flag changes so the routing heuristic can react.
+  useEffect(() => {
+    void settingsApi.get().then(setSettings);
+  }, []);
+
+  useEffect(() => {
+    if (!settings.ollamaEnabled) {
+      setOllamaAvailable(false);
+      return;
+    }
+    let cancelled = false;
+    void ollamaApi.detect(settings.ollamaHost).then((r) => {
+      if (!cancelled) setOllamaAvailable(r.ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.ollamaEnabled, settings.ollamaHost]);
 
   useEffect(() => {
     const off = window.nordrise.on('app:update-downloaded', (info: unknown) => {
@@ -158,13 +189,32 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
           } vedlagt: ${attachments.map((a) => a.filename).join(', ')})_`
         : text;
       send(userId, assistantId, decoratedText, new Date().toISOString());
+
+      const sessionId = active.kind === 'session' ? active.id : null;
+      const perThread =
+        sessionId && settings.perThreadModel[sessionId]
+          ? settings.perThreadModel[sessionId]!
+          : settings.defaultModel;
+      const routed =
+        perThread === 'auto'
+          ? pickModel({
+              text,
+              hasAttachments: attachments.length > 0,
+              defaultModel: 'auto',
+              ollamaAvailable,
+              ollamaModel: settings.ollamaModel,
+              preferOllamaForSimple: settings.preferOllamaForSimple,
+            })
+          : perThread;
+
       stream.start({
-        controlSessionId: active.kind === 'session' ? active.id : null,
+        controlSessionId: sessionId,
         text,
         attachments: attachments.length ? attachments : undefined,
+        ...(routed ? { model: routed } : {}),
       });
     },
-    [active, send, stream],
+    [active, send, stream, settings, ollamaAvailable],
   );
 
   const handleAbort = useCallback(() => {
@@ -243,6 +293,12 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
             onSelect={setActive}
             onNew={() => void handleNew()}
             loading={sessionsLoading}
+            onAfterMutate={() => void refreshSessions()}
+            onArchived={(sid) => {
+              if (active.kind === 'session' && active.id === sid) {
+                setActive({ kind: 'new' });
+              }
+            }}
           />
 
           {active.kind === 'telegram' ? (
@@ -256,6 +312,14 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
               loadError={messagesError}
               onSubmit={handleSubmit}
               onAbort={handleAbort}
+              settings={settings}
+              ollamaAvailable={ollamaAvailable}
+              onChangeThreadModel={async (sid, modelId) => {
+                const next = await settingsApi.set({
+                  perThreadModel: { ...settings.perThreadModel, [sid]: modelId },
+                });
+                setSettings(next);
+              }}
             />
           )}
 
@@ -284,6 +348,13 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
           >
             Quick-tasks
           </button>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="link-button"
+          >
+            Innstillinger
+          </button>
           <button type="button" onClick={() => void onLogout()} className="link-button">
             Logg ut
           </button>
@@ -299,6 +370,14 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
       <QuickTaskManager
         open={managerOpen}
         onClose={() => setManagerOpen(false)}
+      />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        onSettingsChange={setSettings}
+        version={version}
+        onLogout={onLogout}
       />
     </div>
   );

@@ -6,6 +6,7 @@ import { Message } from './Message';
 import { Composer, type ComposerAttachment } from './Composer';
 import { DropZone } from './DropZone';
 import { uploadFile } from '../lib/api';
+import { type AppSettings, modelLabel } from '../lib/settings';
 
 export interface ReadyAttachment {
   fileId: string;
@@ -21,6 +22,14 @@ export interface ChatPaneProps {
   loadError: string | null;
   onSubmit: (text: string, attachments: ReadyAttachment[]) => void;
   onAbort: () => void;
+  settings: AppSettings;
+  ollamaAvailable: boolean;
+  /**
+   * Persist a per-thread model override. Called with the synthetic id `auto`
+   * to clear back to the default heuristic, or with a concrete model id
+   * (claude-* or `ollama:<name>`).
+   */
+  onChangeThreadModel: (sessionId: string, modelId: string) => void | Promise<void>;
 }
 
 function genLocalId(): string {
@@ -35,10 +44,31 @@ export function ChatPane({
   loadError,
   onSubmit,
   onAbort,
+  settings,
+  ollamaAvailable,
+  onChangeThreadModel,
 }: ChatPaneProps) {
   const [draftText, setDraftText] = useState('');
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Resolve which model is active for the current thread (per-thread override
+  // wins over the global default).
+  const activeModelId =
+    sessionId && settings.perThreadModel[sessionId]
+      ? settings.perThreadModel[sessionId]!
+      : settings.defaultModel;
+
+  useEffect(() => {
+    if (!modelMenuOpen) return;
+    function onDocClick(e: MouseEvent) {
+      const t = e.target as HTMLElement;
+      if (!t.closest('.model-chip-wrap')) setModelMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [modelMenuOpen]);
 
   const displayMessages = useMemo(() => {
     return [
@@ -135,16 +165,65 @@ export function ChatPane({
     <DropZone onFiles={handleFiles} disabled={state.streaming}>
       <div className="chat-pane">
         <div className="pane-header">
-          <span className="pane-title">{title}</span>
+          <div className="pane-header-main">
+            <span className="pane-title">{title}</span>
+            {sessionId && (
+              <span className="pane-subtitle">
+                {state.streaming ? 'Sean svarer…' : 'Klar'}
+              </span>
+            )}
+            {!sessionId && (
+              <span className="pane-subtitle">
+                Send første melding for å opprette tråden
+              </span>
+            )}
+          </div>
           {sessionId && (
-            <span className="pane-subtitle">
-              {state.streaming ? 'Sean svarer…' : 'Klar'}
-            </span>
-          )}
-          {!sessionId && (
-            <span className="pane-subtitle">
-              Send første melding for å opprette tråden
-            </span>
+            <div className="model-chip-wrap">
+              <button
+                type="button"
+                className="model-chip"
+                onClick={() => setModelMenuOpen((v) => !v)}
+                title="Velg modell for denne tråden"
+              >
+                <span className="model-chip-dot" />
+                {modelLabel(activeModelId)}
+              </button>
+              {modelMenuOpen && (
+                <div className="model-chip-menu">
+                  {(['auto', 'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5'] as const).map(
+                    (id) => (
+                      <button
+                        key={id}
+                        type="button"
+                        className={`model-chip-menu-row ${activeModelId === id ? 'model-chip-menu-row-active' : ''}`}
+                        onClick={() => {
+                          void onChangeThreadModel(sessionId, id);
+                          setModelMenuOpen(false);
+                        }}
+                      >
+                        {modelLabel(id)}
+                      </button>
+                    ),
+                  )}
+                  {ollamaAvailable && settings.ollamaModel && (
+                    <button
+                      type="button"
+                      className={`model-chip-menu-row ${activeModelId === `ollama:${settings.ollamaModel}` ? 'model-chip-menu-row-active' : ''}`}
+                      onClick={() => {
+                        void onChangeThreadModel(
+                          sessionId,
+                          `ollama:${settings.ollamaModel}`,
+                        );
+                        setModelMenuOpen(false);
+                      }}
+                    >
+                      {modelLabel(`ollama:${settings.ollamaModel}`)}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
 

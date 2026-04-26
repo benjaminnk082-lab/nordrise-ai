@@ -6,6 +6,12 @@ import type { ControlSessionManager } from '../../controlSessionManager.js';
 import { makeRequireControlToken } from './auth.js';
 import { openSseStream, writeSseFrame, startHeartbeat } from './stream.js';
 
+const ModelEnum = z.enum([
+  'claude-opus-4-7',
+  'claude-sonnet-4-6',
+  'claude-haiku-4-5',
+]);
+
 const BodySchema = z.object({
   controlSessionId: z.string().nullable(),
   text: z.string().min(1).max(20_000),
@@ -19,6 +25,7 @@ const BodySchema = z.object({
     )
     .max(5)
     .optional(),
+  model: ModelEnum.optional(),
 });
 
 export interface MessageRouterDeps {
@@ -84,6 +91,7 @@ async function handle(req: Request, res: Response, deps: MessageRouterDeps): Pro
     const result = await bridge.invoke({
       message: prompt,
       sessionId: session.claudeSessionId,
+      ...(body.model ? { model: body.model } : {}),
       signal: ac.signal,
     });
 
