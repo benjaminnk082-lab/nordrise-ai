@@ -84,6 +84,16 @@ export interface AppSettings {
   connectors: ConnectorSettings;
   vault: VaultSettings;
   permissions: PermissionSettings;
+  /**
+   * Master "auto-everything" override. When true, the renderer treats every
+   * permission type as 'auto' regardless of the per-action values stored in
+   * `permissions`. Per-action UI is rendered but disabled. Toggling this flag
+   * off restores the previously stored per-action settings — those values are
+   * never mutated when the global override flips.
+   *
+   * Defaults to true for new installs (Sean is autonomous out of the box).
+   */
+  allPermissionsAuto: boolean;
   theme: 'dark';
 }
 
@@ -121,6 +131,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     githubAccess: 'auto',
     shellExec: 'block',
   },
+  allPermissionsAuto: true,
   theme: 'dark',
 };
 

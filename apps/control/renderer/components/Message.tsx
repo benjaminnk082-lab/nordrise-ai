@@ -1,6 +1,7 @@
 'use client';
 import ReactMarkdownPkg from 'react-markdown';
 import rehypeHighlightPkg from 'rehype-highlight';
+import type { ComponentPropsWithoutRef } from 'react';
 import type { ReactionValue } from '../../src/server-types';
 
 // react-markdown 9 ships ESM. Under Next's bundler we still need to
@@ -39,6 +40,41 @@ export interface MessageProps {
    * upserts. Parent owns the optimistic update + fetch.
    */
   onReact?: (messageId: string, next: ReactionValue | null) => void;
+}
+
+/**
+ * Custom <pre> renderer for ReactMarkdown that extracts the language hint
+ * from the inner <code class="language-xxx"> and surfaces it as a small
+ * Apple-style pill in the upper right corner via the `data-lang` attribute
+ * (CSS draws the pill).
+ */
+function PreWithLangPill(props: ComponentPropsWithoutRef<'pre'>) {
+  const { children, ...rest } = props;
+  let lang: string | undefined;
+  // Walk the immediate child <code> to read its class.
+  const childArr = Array.isArray(children) ? children : [children];
+  for (const c of childArr) {
+    if (
+      c &&
+      typeof c === 'object' &&
+      'props' in (c as Record<string, unknown>)
+    ) {
+      const childProps = (c as { props?: { className?: string } }).props;
+      const cls = childProps?.className ?? '';
+      const m = cls.match(/language-([\w-]+)/);
+      if (m) {
+        lang = m[1];
+        break;
+      }
+    }
+  }
+  // Strip very-noisy "hljs" or unknown tokens; keep the human-readable lang.
+  const dataLang = lang && lang !== 'hljs' ? lang : undefined;
+  return (
+    <pre {...rest} {...(dataLang ? { 'data-lang': dataLang } : {})}>
+      {children}
+    </pre>
+  );
 }
 
 function formatTime(iso?: string): string {
@@ -112,9 +148,21 @@ export function Message({
             <span />
             <span />
           </span>
+        ) : streaming && !content ? (
+          // Apple-style typing dots while streaming hasn't yielded a chunk yet
+          <span className="typing-dots" aria-label="Sean svarer…">
+            <span />
+            <span />
+            <span />
+          </span>
         ) : (
           <div className="bubble-md">
-            <ReactMarkdown rehypePlugins={[rehypeHighlight]}>{content || ''}</ReactMarkdown>
+            <ReactMarkdown
+              rehypePlugins={[rehypeHighlight]}
+              components={{ pre: PreWithLangPill }}
+            >
+              {content || ''}
+            </ReactMarkdown>
           </div>
         )}
         {streaming && content && <span className="streaming-cursor" />}

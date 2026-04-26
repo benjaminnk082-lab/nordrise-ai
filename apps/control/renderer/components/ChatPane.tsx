@@ -315,7 +315,11 @@ export function ChatPane({
 
         <div className="message-list" ref={scrollRef}>
           {loading && state.serverMessages.length === 0 && (
-            <div className="pane-empty">Henter meldinger…</div>
+            <div className="pane-empty pane-skeleton">
+              <div className="skeleton skeleton-line" style={{ width: '50%' }} />
+              <div className="skeleton skeleton-line" style={{ width: '70%' }} />
+              <div className="skeleton skeleton-line" style={{ width: '40%' }} />
+            </div>
           )}
           {loadError && (
             <div className="pane-empty pane-error">
@@ -323,14 +327,23 @@ export function ChatPane({
             </div>
           )}
           {!loading && !loadError && displayMessages.length === 0 && (
-            <div className="pane-empty pane-welcome">
+            <div className="pane-empty pane-welcome animate-in">
               <div className="welcome-orb" aria-hidden="true">
                 <span>S</span>
               </div>
-              <div>Spør Sean om ideer, regnskap, kode — hva som helst.</div>
-              <div style={{ fontSize: 12, color: 'rgba(244,244,247,0.4)' }}>
-                Tips: dra og slipp en fil for å legge den ved.
+              <div className="pane-welcome-title">
+                {sessionId ? 'Si noe til Sean' : 'Velg en tråd eller start ny'}
               </div>
+              <div className="pane-welcome-sub">
+                {sessionId
+                  ? 'Skriv en melding nedenfor — eller dra og slipp en fil for å legge den ved.'
+                  : 'Trykk + Ny i venstre kolonne, eller skriv direkte i komposisjonsfeltet.'}
+              </div>
+              {!sessionId && (
+                <div className="pane-welcome-hint">
+                  <kbd>Ctrl</kbd>+<kbd>K</kbd> for hurtig-oppgaver
+                </div>
+              )}
             </div>
           )}
           {displayMessages.map((m) => (

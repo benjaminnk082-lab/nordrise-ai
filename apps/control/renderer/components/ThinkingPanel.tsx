@@ -7,6 +7,24 @@ export interface ThinkingPanelProps {
   streaming: boolean;
 }
 
+/**
+ * Map verktøyets canonical name to a small glyph. Anything unknown falls
+ * back to a generic wrench. Keeps the panel readable when Sean fires off
+ * a long chain of tools.
+ */
+function toolGlyph(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('bash') || n.includes('shell')) return '⌨';
+  if (n.includes('read') || n.includes('view')) return '📖';
+  if (n.includes('write') || n.includes('edit') || n.includes('apply')) return '✏';
+  if (n.includes('search') || n.includes('grep')) return '🔍';
+  if (n.includes('web') || n.includes('fire') || n.includes('fetch')) return '🌐';
+  if (n.includes('git')) return '🐙';
+  if (n.includes('telegram')) return '✉';
+  if (n.includes('mcp')) return '⊕';
+  return '🔧';
+}
+
 export function ThinkingPanel({ tools, streaming }: ThinkingPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -53,6 +71,9 @@ export function ThinkingPanel({ tools, streaming }: ThinkingPanelProps) {
         {tools.map((t) => (
           <div key={t.id} className={`tool-card tool-${t.status}`}>
             <div className="tool-head">
+              <span className="tool-glyph" aria-hidden="true">
+                {toolGlyph(t.name)}
+              </span>
               <span
                 className={`tool-status-dot ${t.status === 'running' ? 'pulsing' : 'done'}`}
               />

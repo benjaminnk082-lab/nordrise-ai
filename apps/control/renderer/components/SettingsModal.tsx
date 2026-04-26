@@ -25,6 +25,7 @@ import {
   type UpdateStatus,
 } from '../lib/bridge';
 import { RoutinesSection } from './RoutinesSection';
+import { ProactiveSection } from './ProactiveSection';
 import { vaultApi, formatRelative, type VaultStatus, type SeanNote } from '../lib/vault';
 
 export interface SettingsModalProps {
@@ -534,12 +535,21 @@ export function SettingsModal({
           {/* TILLATELSER */}
           <PermissionsSection
             permissions={settings.permissions}
+            allPermissionsAuto={settings.allPermissionsAuto}
+            onChangeAllAuto={(next) =>
+              void updateSettings({ allPermissionsAuto: next })
+            }
             onChange={(patch) =>
               void updateSettings({
                 permissions: { ...settings.permissions, ...patch },
               })
             }
           />
+
+          <div className="settings-divider" />
+
+          {/* PROAKTIV SEAN */}
+          <ProactiveSection />
 
           <div className="settings-divider" />
 
@@ -1078,48 +1088,115 @@ const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
 
 interface PermissionsSectionProps {
   permissions: PermissionSettings;
+  allPermissionsAuto: boolean;
   onChange: (patch: Partial<PermissionSettings>) => void;
+  onChangeAllAuto: (next: boolean) => void;
 }
 
-function PermissionsSection({ permissions, onChange }: PermissionsSectionProps) {
+function PermissionsSection({
+  permissions,
+  allPermissionsAuto,
+  onChange,
+  onChangeAllAuto,
+}: PermissionsSectionProps) {
   return (
     <section className="settings-section">
       <h3 className="settings-section-title">Tillatelser</h3>
       <p className="settings-section-sub">
         Hvor proaktiv Sean får være. <strong>Auto</strong> kjører
         uten å spørre, <strong>Spør</strong> ber om bekreftelse,{' '}
-        <strong>Blokker</strong> nekter handlingen helt. Bare vault-skriving
-        er håndhevet i v0.2.3 — resten lagres som hensikt og kobles
-        på backenden i v0.2.4.
+        <strong>Blokker</strong> nekter handlingen helt.
       </p>
-      {PERMISSION_ROWS.map((row) => (
-        <div key={row.key} className="perm-row">
-          <div>
-            <div className="perm-label">{row.label}</div>
-            <div className="perm-desc">{row.desc}</div>
+
+      {/* Master "auto-everything" toggle. When ON, the renderer treats every
+          permission as 'auto' regardless of per-action stored values — those
+          are preserved so the user can revert by toggling this off. */}
+      <div
+        className={
+          'perm-master' + (allPermissionsAuto ? ' perm-master-on' : '')
+        }
+      >
+        <div className="perm-master-text">
+          <div className="perm-master-label">
+            <span aria-hidden="true">⚡</span> Auto-modus
+            <span className="perm-master-sub-inline">
+              alle handlinger godkjennes
+            </span>
           </div>
-          <div className="perm-segment" role="radiogroup" aria-label={row.label}>
-            {PERMISSION_MODES.map((m) => {
-              const active = permissions[row.key] === m.value;
-              return (
-                <button
-                  key={m.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  className={
-                    'perm-segment-btn' +
-                    (active ? ' perm-segment-btn-active' : '')
-                  }
-                  onClick={() => onChange({ [row.key]: m.value } as Partial<PermissionSettings>)}
-                >
-                  {m.label}
-                </button>
-              );
-            })}
+          <div className="perm-master-desc">
+            {allPermissionsAuto
+              ? 'Sean trenger ikke spørre — han utfører oppgaver fritt. Per-action innstillinger nedenfor er deaktivert mens dette er på.'
+              : 'Sean spør / blokkerer i henhold til per-action innstillinger nedenfor.'}
           </div>
         </div>
-      ))}
+        <label className="perm-master-switch" aria-label="Auto-modus">
+          <input
+            type="checkbox"
+            checked={allPermissionsAuto}
+            onChange={(e) => onChangeAllAuto(e.target.checked)}
+          />
+          <span className="perm-master-track">
+            <span className="perm-master-thumb" />
+          </span>
+        </label>
+      </div>
+
+      <div
+        className={
+          'perm-rows-wrap' + (allPermissionsAuto ? ' perm-rows-overridden' : '')
+        }
+        aria-disabled={allPermissionsAuto}
+      >
+        {allPermissionsAuto && (
+          <div className="perm-overridden-banner">
+            Per-action innstillinger er overstyrt av Auto-modus.
+          </div>
+        )}
+        {PERMISSION_ROWS.map((row) => (
+          <div key={row.key} className="perm-row">
+            <div>
+              <div className="perm-label">{row.label}</div>
+              <div className="perm-desc">{row.desc}</div>
+            </div>
+            <div
+              className="perm-segment"
+              role="radiogroup"
+              aria-label={row.label}
+            >
+              {PERMISSION_MODES.map((m) => {
+                // When the master override is on, visually pin "auto" as
+                // active even though the stored value may differ. The stored
+                // value is preserved untouched so toggling off restores it.
+                const effective = allPermissionsAuto
+                  ? 'auto'
+                  : permissions[row.key];
+                const active = effective === m.value;
+                return (
+                  <button
+                    key={m.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={allPermissionsAuto}
+                    className={
+                      'perm-segment-btn' +
+                      (active ? ' perm-segment-btn-active' : '')
+                    }
+                    onClick={() =>
+                      !allPermissionsAuto &&
+                      onChange({
+                        [row.key]: m.value,
+                      } as Partial<PermissionSettings>)
+                    }
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

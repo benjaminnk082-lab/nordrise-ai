@@ -161,3 +161,52 @@ export interface SuggestionGenerateResult {
   skipped: boolean;
   reason?: string;
 }
+
+// ---------- Proactive engine ----------
+
+/**
+ * Singleton settings row for the proactive engine, mirroring the Prisma
+ * `ProactiveSettings` model. Quiet hours: `quietHourStart` inclusive,
+ * `quietHourEnd` exclusive (start=22, end=8 → hours 22, 23, 0..7 silent).
+ * Cadence is the cron-tick spacing in minutes.
+ */
+export interface ProactiveSettingsRow {
+  id: string;
+  enabled: boolean;
+  quietHourStart: number;
+  quietHourEnd: number;
+  maxPerHour: number;
+  maxPerDay: number;
+  cadenceMin: number;
+  updatedAt: string;
+}
+
+export type ProactiveDecision =
+  | 'sent'
+  | 'skipped'
+  | 'rate_limited'
+  | 'quiet_hours'
+  | 'disabled';
+
+export type ProactiveCategory =
+  | 'question'
+  | 'status'
+  | 'idea'
+  | 'observation'
+  | 'check-in';
+
+export interface ProactiveAttemptRow {
+  id: string;
+  triggeredAt: string;
+  decision: ProactiveDecision | string;
+  reason: string | null;
+  message: string | null;
+  category: ProactiveCategory | string | null;
+  costUsd: number | null;
+}
+
+export interface ProactiveRunNowResult {
+  decision: ProactiveDecision | string;
+  reason?: string | null;
+  category?: ProactiveCategory | string | null;
+}

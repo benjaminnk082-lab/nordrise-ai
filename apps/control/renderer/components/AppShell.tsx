@@ -20,6 +20,7 @@ import { SettingsModal } from './SettingsModal';
 import { RoutinesPill } from './RoutinesPill';
 import { SuggestionsPill } from './SuggestionsPill';
 import { SeanNotesPanel } from './SeanNotesPanel';
+import { SeanStatusPill } from './SeanStatusPill';
 import { vaultApi } from '../lib/vault';
 import { quitAndInstall, getPendingUpdate } from '../lib/bridge';
 import {
@@ -411,6 +412,7 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
             <span className="status-dot online" />
             Sean online
           </span>
+          <SeanStatusPill />
           <span className="shell-foot-meta">
             v{version || '?'}
             {updateReady && (

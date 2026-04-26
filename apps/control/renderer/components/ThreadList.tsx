@@ -122,10 +122,21 @@ export function ThreadList({
 
       <div className="thread-list">
         {loading && sessions.length === 0 && (
-          <div className="thread-empty">Laster tråder…</div>
+          <>
+            <div className="skeleton skeleton-thread" />
+            <div className="skeleton skeleton-thread" style={{ opacity: 0.7 }} />
+            <div className="skeleton skeleton-thread" style={{ opacity: 0.45 }} />
+          </>
         )}
         {!loading && sessions.length === 0 && (
-          <div className="thread-empty">Ingen tråder enda. Start en ny.</div>
+          <div className="thread-empty">
+            <div style={{ fontSize: 13, marginBottom: 4 }}>
+              Ingen tråder ennå
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(244,244,247,0.4)' }}>
+              Trykk <strong>+ Ny</strong> for å starte
+            </div>
+          </div>
         )}
         {sessions.map((s) => {
           const isActive = active.kind === 'session' && active.id === s.id;

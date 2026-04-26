@@ -39,6 +39,12 @@ export interface AppSettings {
   connectors: ConnectorSettings;
   vault: VaultSettings;
   permissions: PermissionSettings;
+  /**
+   * Master "auto-everything" override. When true the renderer treats every
+   * permission as 'auto' regardless of the per-action stored value. Defaults
+   * to true for new installs.
+   */
+  allPermissionsAuto: boolean;
   theme: 'dark';
 }
 
@@ -65,6 +71,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     githubAccess: 'auto',
     shellExec: 'block',
   },
+  allPermissionsAuto: true,
   theme: 'dark',
 };
 
@@ -111,6 +118,20 @@ export function buildConnectorKeys(
     out.GITHUB_PERSONAL_ACCESS_TOKEN = gh.token.trim();
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * Returns the EFFECTIVE permission mode for a given action, honouring the
+ * `allPermissionsAuto` master override. The stored per-action value is
+ * preserved untouched in `settings.permissions` so toggling the global flag
+ * off reveals it again.
+ */
+export function effectivePermission(
+  settings: AppSettings,
+  key: keyof PermissionSettings,
+): PermissionMode {
+  if (settings.allPermissionsAuto) return 'auto';
+  return settings.permissions[key];
 }
 
 /**
