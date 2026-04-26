@@ -18,6 +18,10 @@ import {
   getUpdateStatus,
   getUpdateLog,
   checkForUpdate,
+  getClaudeAuthToken,
+  setClaudeAuthToken,
+  clearClaudeAuthToken,
+  testClaudeAuthToken,
   type UpdateStatus,
 } from '../lib/bridge';
 import { RoutinesSection } from './RoutinesSection';
@@ -610,6 +614,11 @@ export function SettingsModal({
 
           <div className="settings-divider" />
 
+          {/* CLAUDE-AUTH — per-user Claude OAuth token */}
+          <ClaudeAuthSection />
+
+          <div className="settings-divider" />
+
           {/* HOTKEYS */}
           <section className="settings-section">
             <h3 className="settings-section-title">Hurtigtaster</h3>
@@ -647,6 +656,155 @@ export function SettingsModal({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Per-user Claude OAuth token. When set, /control/message attaches the token
+ * to every request and the backend uses it to spawn claude-code (overriding
+ * the server's default Max quota). When unset, the server's default token
+ * is used. Stored in the OS keychain via the `claude-auth:*` IPC bridge —
+ * never written to settings.json.
+ */
+function ClaudeAuthSection() {
+  const [stored, setStored] = useState<string | null>(null);
+  const [input, setInput] = useState('');
+  const [show, setShow] = useState(false);
+  const [status, setStatus] = useState<
+    | { kind: 'idle' }
+    | { kind: 'saving' }
+    | { kind: 'testing' }
+    | { kind: 'ok'; msg?: string }
+    | { kind: 'error'; msg: string }
+  >({ kind: 'idle' });
+
+  // Load the existing token on mount so we can show "satt" / "ikke satt"
+  // status without echoing the secret back into the input.
+  useEffect(() => {
+    void getClaudeAuthToken().then(setStored);
+  }, []);
+
+  function explainError(err: string | undefined): string {
+    switch (err) {
+      case 'wrong_format':
+        return 'Tokenet må starte med sk-ant-oat01-.';
+      case 'too_short':
+        return 'Tokenet ser for kort ut.';
+      case 'no_bearer':
+        return 'Du er ikke logget inn (mangler Sean-token).';
+      default:
+        return err ?? 'ukjent feil';
+    }
+  }
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    const t = input.trim();
+    if (!t) {
+      setStatus({ kind: 'error', msg: 'Lim inn et token først.' });
+      return;
+    }
+    setStatus({ kind: 'testing' });
+    try {
+      const v = await testClaudeAuthToken(t);
+      if (!v.ok) {
+        setStatus({ kind: 'error', msg: explainError(v.error) });
+        return;
+      }
+      setStatus({ kind: 'saving' });
+      await setClaudeAuthToken(t);
+      setStored(t);
+      setInput('');
+      setStatus({ kind: 'ok', msg: 'Token lagret.' });
+    } catch (err) {
+      setStatus({ kind: 'error', msg: String((err as Error).message) });
+    }
+  }
+
+  async function clearStored() {
+    if (!confirm('Fjerne din egen Claude-token? Server-default brukes igjen.')) return;
+    await clearClaudeAuthToken();
+    setStored(null);
+    setStatus({ kind: 'ok', msg: 'Token fjernet — bruker server-default.' });
+  }
+
+  return (
+    <section className="settings-section">
+      <h3 className="settings-section-title">Claude-auth</h3>
+      <p className="settings-section-sub">
+        Egen Claude OAuth-token. Når satt, brenner samtaler din egen
+        Max-kvote (ikke Benjamins). Hvis ikke satt, faller server tilbake
+        til standard-token.
+      </p>
+      <p className="settings-section-sub">
+        Generer ved å kjøre <code>claude setup-token</code> i terminalen din,
+        så lim inn her. Token starter med <code>sk-ant-oat01-</code>.
+      </p>
+
+      <div
+        className={`settings-status settings-status-${stored ? 'ok' : 'idle'}`}
+        style={{ marginBottom: 10 }}
+      >
+        {stored ? '✓ Egen token aktiv' : 'Ingen token — bruker server-default'}
+      </div>
+
+      <form onSubmit={save} className="settings-token-form">
+        <div className="settings-key-row">
+          <input
+            type={show ? 'text' : 'password'}
+            className="settings-field-input"
+            placeholder="sk-ant-oat01-…"
+            value={input}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(e) => {
+              setInput(e.target.value);
+              if (status.kind !== 'idle') setStatus({ kind: 'idle' });
+            }}
+          />
+          <button
+            type="button"
+            className="settings-key-toggle"
+            onClick={() => setShow((v) => !v)}
+            aria-label={show ? 'Skjul token' : 'Vis token'}
+          >
+            {show ? 'Skjul' : 'Vis'}
+          </button>
+          <button
+            type="submit"
+            className="qt-btn-primary"
+            disabled={status.kind === 'testing' || status.kind === 'saving' || !input.trim()}
+          >
+            {status.kind === 'testing'
+              ? 'Tester…'
+              : status.kind === 'saving'
+                ? 'Lagrer…'
+                : 'Lagre'}
+          </button>
+        </div>
+      </form>
+
+      {status.kind === 'error' && (
+        <div className="settings-status settings-status-fail" style={{ marginTop: 8 }}>
+          {status.msg}
+        </div>
+      )}
+      {status.kind === 'ok' && status.msg && (
+        <div className="settings-status settings-status-ok" style={{ marginTop: 8 }}>
+          ✓ {status.msg}
+        </div>
+      )}
+
+      {stored && (
+        <button
+          type="button"
+          className="qt-btn-secondary settings-logout-btn"
+          onClick={() => void clearStored()}
+        >
+          Logg ut Claude
+        </button>
+      )}
+    </section>
   );
 }
 

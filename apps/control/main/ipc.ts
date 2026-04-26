@@ -10,6 +10,7 @@ import {
   type AppSettings,
 } from './settingsStore.js';
 import { detectOllama, listOllamaModels, streamOllama } from './ollama.js';
+import { fetchPersona, clearPersonaCache } from './persona.js';
 import {
   startVaultSync,
   stopVaultSync,
@@ -22,6 +23,10 @@ import {
 
 const DEFAULT_BACKEND = 'https://sean-production-4fcf.up.railway.app';
 const TOKEN_SLOT = 'bearer';
+/** Account name used for the per-user Claude OAuth token in the OS keychain. */
+const CLAUDE_AUTH_SLOT = 'claude-oauth';
+/** Expected prefix for a Claude OAuth token. */
+const CLAUDE_OAUTH_PREFIX = 'sk-ant-oat01-';
 
 // Use Electron's net.fetch (Chromium network stack) — more reliable in
 // packaged apps than Node's global fetch on Windows where some TLS / undici
@@ -53,6 +58,11 @@ interface StreamStartPayload {
   connectorKeys?: Record<string, string>;
 }
 
+interface ClaudeAuthTestResult {
+  ok: boolean;
+  error?: 'wrong_format' | 'too_short' | 'no_bearer' | string;
+}
+
 interface OllamaStreamStartPayload {
   streamId: string;
   prompt: string;
@@ -71,6 +81,34 @@ export function registerIpc(): void {
   ipcMain.handle('auth:get-token', () => getToken(TOKEN_SLOT));
   ipcMain.handle('auth:set-token', (_e, token: string) => setToken(TOKEN_SLOT, token));
   ipcMain.handle('auth:clear-token', () => deleteToken(TOKEN_SLOT));
+
+  // Per-user Claude OAuth token. Stored in the OS keychain under a separate
+  // account slot so it can't collide with the bearer-token. Forwarded
+  // ephemerally on every /control/message call (see stream-start below).
+  ipcMain.handle('claude-auth:get-token', () => getToken(CLAUDE_AUTH_SLOT));
+  ipcMain.handle('claude-auth:set-token', (_e, token: string) =>
+    setToken(CLAUDE_AUTH_SLOT, token),
+  );
+  ipcMain.handle('claude-auth:clear-token', () => deleteToken(CLAUDE_AUTH_SLOT));
+  // Lightweight client-side validation: check format + length only. A "real"
+  // round-trip test (does this token actually authenticate against
+  // Anthropic's API?) is too complex for v0.3.0 — the first real request
+  // will surface auth failures via the bridge error frame, which is enough
+  // for users to course-correct.
+  ipcMain.handle(
+    'claude-auth:test',
+    async (_e, token: string): Promise<ClaudeAuthTestResult> => {
+      const t = (token ?? '').trim();
+      if (!t.startsWith(CLAUDE_OAUTH_PREFIX)) return { ok: false, error: 'wrong_format' };
+      if (t.length < 50) return { ok: false, error: 'too_short' };
+      // Optionally verify that we still have a bearer-token so the user
+      // hasn't logged out concurrently. This isn't a hard requirement but
+      // surfaces a useful error.
+      const bearer = await getToken(TOKEN_SLOT);
+      if (!bearer) return { ok: false, error: 'no_bearer' };
+      return { ok: true };
+    },
+  );
 
   ipcMain.handle('config:backend-url', () => process.env.NORDRISE_BACKEND_URL ?? DEFAULT_BACKEND);
 
@@ -180,6 +218,12 @@ export function registerIpc(): void {
     const ac = new AbortController();
     activeStreams.set(payload.streamId, ac);
 
+    // Pull the per-user Claude OAuth token from the keychain. When set, the
+    // backend uses it to spawn claude-code; when null, claude-code falls
+    // back to the server-side default. Renderer never sees this value —
+    // it lives entirely in main.
+    const claudeAuthToken = await getToken(CLAUDE_AUTH_SLOT);
+
     try {
       const res = await netFetch(`${backend}/control/message`, {
         method: 'POST',
@@ -195,6 +239,7 @@ export function registerIpc(): void {
           ...(payload.connectorKeys && Object.keys(payload.connectorKeys).length
             ? { connectorKeys: payload.connectorKeys }
             : {}),
+          ...(claudeAuthToken ? { claudeAuthToken } : {}),
         }),
         signal: ac.signal,
       });
@@ -284,6 +329,14 @@ export function registerIpc(): void {
       const ac = new AbortController();
       activeStreams.set(payload.streamId, ac);
 
+      // Cross-model identity: fetch Sean's persona from the backend (cached)
+      // and inject via Ollama's `system` parameter. Empty string means we
+      // either failed to fetch or the user isn't authed yet — fall through
+      // without a system prompt rather than crash the stream.
+      const bearer = await getToken(TOKEN_SLOT);
+      const backend = process.env.NORDRISE_BACKEND_URL ?? DEFAULT_BACKEND;
+      const persona = bearer ? await fetchPersona(backend, bearer) : '';
+
       // Surface a "session" frame mirror so the renderer's existing useStream
       // bookkeeping still runs (controlSessionId is what it ultimately cares
       // about). claudeSessionId is left empty since Sean isn't involved.
@@ -307,6 +360,7 @@ export function registerIpc(): void {
           host,
           model: payload.model,
           prompt: payload.prompt,
+          ...(persona ? { system: persona } : {}),
           signal: ac.signal,
           onChunk: (text) => {
             fullResponse += text;
@@ -336,8 +390,6 @@ export function registerIpc(): void {
           if (payload.controlSessionId && fullResponse.trim()) {
             const token = await getToken(TOKEN_SLOT);
             if (token) {
-              const backend =
-                process.env.NORDRISE_BACKEND_URL ?? DEFAULT_BACKEND;
               const post = (role: 'user' | 'assistant', content: string) =>
                 netFetch(
                   `${backend}/control/sessions/${payload.controlSessionId}/messages`,

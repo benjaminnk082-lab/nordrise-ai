@@ -55,3 +55,35 @@ export async function getUpdateLog(): Promise<string[]> {
 export async function checkForUpdate(): Promise<UpdateStatus> {
   return window.nordrise.invoke<UpdateStatus>('app:update-check');
 }
+
+// ---------- Per-user Claude OAuth token ----------
+
+/**
+ * Read whether the user has stored their own Claude OAuth token. Returns
+ * the token string itself so the renderer can decide whether to show the
+ * "set" or "unset" UI state — but the value is never sent over the wire by
+ * the renderer; main attaches it to /control/message internally.
+ */
+export async function getClaudeAuthToken(): Promise<string | null> {
+  return window.nordrise.invoke<string | null>('claude-auth:get-token');
+}
+
+export async function setClaudeAuthToken(token: string): Promise<void> {
+  await window.nordrise.invoke<void>('claude-auth:set-token', token);
+}
+
+export async function clearClaudeAuthToken(): Promise<void> {
+  await window.nordrise.invoke<void>('claude-auth:clear-token');
+}
+
+export interface ClaudeAuthTestResult {
+  ok: boolean;
+  error?: string;
+}
+
+export async function testClaudeAuthToken(token: string): Promise<ClaudeAuthTestResult> {
+  return window.nordrise.invoke<ClaudeAuthTestResult>(
+    'claude-auth:test',
+    token,
+  );
+}

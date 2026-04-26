@@ -245,4 +245,127 @@ describe('POST /control/message', () => {
       });
     expect(bridge.lastInvoke?.extraSystemPrompt).toBeUndefined();
   });
+
+  // ---------- Per-user Claude OAuth token ----------
+
+  it('forwards claudeAuthToken to the bridge as CLAUDE_CODE_OAUTH_TOKEN env', async () => {
+    const { app, bridge } = buildApp('success');
+    await request(app)
+      .post('/control/message')
+      .set('Authorization', 'Bearer t1')
+      .send({
+        controlSessionId: null,
+        text: 'hei',
+        claudeAuthToken: 'sk-ant-oat01-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      })
+      .buffer(true)
+      .parse((res, cb) => {
+        let data = '';
+        res.on('data', (c) => (data += c.toString()));
+        res.on('end', () => cb(null, data));
+      });
+    expect(bridge.lastInvoke?.env).toEqual({
+      CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    });
+  });
+
+  it('omits CLAUDE_CODE_OAUTH_TOKEN from env when claudeAuthToken absent', async () => {
+    const { app, bridge } = buildApp('success');
+    await request(app)
+      .post('/control/message')
+      .set('Authorization', 'Bearer t1')
+      .send({ controlSessionId: null, text: 'hei' })
+      .buffer(true)
+      .parse((res, cb) => {
+        let data = '';
+        res.on('data', (c) => (data += c.toString()));
+        res.on('end', () => cb(null, data));
+      });
+    // Either env is undefined (no keys at all) or it doesn't contain the
+    // user-token key. The previous test for "omits env when no
+    // connectorKeys provided" guarantees the undefined case; keep this
+    // assertion narrow to make the contract obvious.
+    expect(bridge.lastInvoke?.env?.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+  });
+
+  it('combines claudeAuthToken with connectorKeys in spawn env', async () => {
+    const { app, bridge } = buildApp('success');
+    await request(app)
+      .post('/control/message')
+      .set('Authorization', 'Bearer t1')
+      .send({
+        controlSessionId: null,
+        text: 'hei',
+        claudeAuthToken: 'sk-ant-oat01-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        connectorKeys: { FIRECRAWL_API_KEY: 'fc-secret-123' },
+      })
+      .buffer(true)
+      .parse((res, cb) => {
+        let data = '';
+        res.on('data', (c) => (data += c.toString()));
+        res.on('end', () => cb(null, data));
+      });
+    expect(bridge.lastInvoke?.env).toEqual({
+      FIRECRAWL_API_KEY: 'fc-secret-123',
+      CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    });
+  });
+
+  it('rejects claudeAuthToken shorter than 20 chars (zod validation)', async () => {
+    const { app } = buildApp('success');
+    const res = await request(app)
+      .post('/control/message')
+      .set('Authorization', 'Bearer t1')
+      .send({ controlSessionId: null, text: 'hei', claudeAuthToken: 'short' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 402 when REQUIRE_USER_CLAUDE_TOKEN is true and no token sent', async () => {
+    // We can't mutate the loaded `config` object in-place reliably, so build
+    // a tiny app that simulates the gate by reading a local override. Pull
+    // the same module under test but spy on the loaded config.
+    const { config } = await import('../../config.js');
+    const original = config.REQUIRE_USER_CLAUDE_TOKEN;
+    (config as { REQUIRE_USER_CLAUDE_TOKEN: boolean }).REQUIRE_USER_CLAUDE_TOKEN = true;
+    try {
+      const { app } = buildApp('success');
+      const res = await request(app)
+        .post('/control/message')
+        .set('Authorization', 'Bearer t1')
+        .send({ controlSessionId: null, text: 'hei' });
+      expect(res.status).toBe(402);
+      expect(res.body).toEqual({ error: 'user_token_required' });
+    } finally {
+      (config as { REQUIRE_USER_CLAUDE_TOKEN: boolean }).REQUIRE_USER_CLAUDE_TOKEN = original;
+    }
+  });
+
+  it('accepts the call with REQUIRE_USER_CLAUDE_TOKEN=true if claudeAuthToken is present', async () => {
+    const { config } = await import('../../config.js');
+    const original = config.REQUIRE_USER_CLAUDE_TOKEN;
+    (config as { REQUIRE_USER_CLAUDE_TOKEN: boolean }).REQUIRE_USER_CLAUDE_TOKEN = true;
+    try {
+      const { app, bridge } = buildApp('success');
+      const res = await request(app)
+        .post('/control/message')
+        .set('Authorization', 'Bearer t1')
+        .send({
+          controlSessionId: null,
+          text: 'hei',
+          claudeAuthToken: 'sk-ant-oat01-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        })
+        .buffer(true)
+        .parse((res, cb) => {
+          let data = '';
+          res.on('data', (c) => (data += c.toString()));
+          res.on('end', () => cb(null, data));
+        });
+      expect(res.status).toBe(200);
+      expect(bridge.lastInvoke?.env?.CLAUDE_CODE_OAUTH_TOKEN).toBe(
+        'sk-ant-oat01-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      );
+    } finally {
+      (config as { REQUIRE_USER_CLAUDE_TOKEN: boolean }).REQUIRE_USER_CLAUDE_TOKEN = original;
+    }
+  });
 });

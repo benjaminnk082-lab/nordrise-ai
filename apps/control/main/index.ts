@@ -5,6 +5,7 @@ import { mainWindowOptions } from './windows.js';
 import { registerIpc } from './ipc.js';
 import { initTray, setTrayStatus } from './tray.js';
 import { initAutoUpdate } from './autoUpdate.js';
+import { clearPersonaCache } from './persona.js';
 import { setPopupPreloadPath } from './popup.js';
 import { registerHotkeys, unregisterHotkeys } from './hotkeys.js';
 import { getSettings } from './settingsStore.js';
@@ -109,6 +110,11 @@ app.whenReady().then(async () => {
     }
   }, 30_000);
   initAutoUpdate();
+
+  // Refresh Sean's persona cache once an hour so cross-model identity stays
+  // in sync with `src/prompts/sean.md` without restarting the app. The
+  // first fetch happens lazily on the first Ollama stream.
+  setInterval(() => clearPersonaCache(), 60 * 60 * 1000);
 });
 
 app.on('will-quit', () => {

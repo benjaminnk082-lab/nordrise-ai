@@ -113,5 +113,9 @@ export async function manualCheck(): Promise<UpdateStatus> {
 }
 
 export function quitAndInstall(): void {
-  autoUpdater.quitAndInstall(false, true);
+  // (isSilent=true ensures the NSIS installer runs with /S — no installer
+  //  wizard appears on relaunch; isForceRunAfter=true relaunches the app
+  //  afterwards. Works with `oneClick: false` because NSIS's /S flag
+  //  suppresses UI regardless of the oneClick setting.)
+  autoUpdater.quitAndInstall(true, true);
 }

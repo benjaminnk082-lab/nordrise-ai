@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import type { PrismaClient } from '@prisma/client';
+import { config } from '../../config.js';
 import { logger } from '../../logger.js';
 import type { ClaudeBridge } from '../../claudeBridge.js';
 import type { ControlSessionManager } from '../../controlSessionManager.js';
@@ -38,6 +39,14 @@ const BodySchema = z.object({
    * (mcp-config/claude-settings.json) substitutes them. NEVER persisted.
    */
   connectorKeys: ConnectorKeysSchema.optional(),
+  /**
+   * Per-user Claude OAuth token (e.g. `sk-ant-oat01-…`). Travels ephemerally
+   * with the message and is forwarded into claude-code's spawn env as
+   * `CLAUDE_CODE_OAUTH_TOKEN`, overriding the server-default token for that
+   * subprocess. Never persisted backend-side. When absent, claude-code uses
+   * the server's default token (inherited from `process.env`).
+   */
+  claudeAuthToken: z.string().min(20).max(500).optional(),
 });
 
 export interface MessageRouterDeps {
@@ -125,6 +134,14 @@ async function handle(req: Request, res: Response, deps: MessageRouterDeps): Pro
     return;
   }
   const body = parsed.data;
+
+  // When the deployment is locked to per-user tokens (shared instances), refuse
+  // anonymous traffic up-front so it never reaches the bridge / consumes quota.
+  if (config.REQUIRE_USER_CLAUDE_TOKEN && !body.claudeAuthToken) {
+    res.status(402).json({ error: 'user_token_required' });
+    return;
+  }
+
   let session;
   try {
     session = await deps.mgr.getOrCreate(body.controlSessionId);
@@ -174,6 +191,12 @@ async function handle(req: Request, res: Response, deps: MessageRouterDeps): Pro
     }
     if (body.connectorKeys?.GITHUB_PERSONAL_ACCESS_TOKEN) {
       env.GITHUB_PERSONAL_ACCESS_TOKEN = body.connectorKeys.GITHUB_PERSONAL_ACCESS_TOKEN;
+    }
+    // Per-user Claude OAuth token overrides the server's default for this
+    // subprocess. Spread order in the bridge ensures opts.env wins over
+    // sanitizedEnv() (which carries process.env's CLAUDE_CODE_OAUTH_TOKEN).
+    if (body.claudeAuthToken) {
+      env.CLAUDE_CODE_OAUTH_TOKEN = body.claudeAuthToken;
     }
 
     // Compose the per-thread system-prompt extras (custom prompt + recent

@@ -36,6 +36,27 @@ const schema = z.object({
   WORKSPACE_DIR: z.string().default('/app/workspace'),
 
   CONTROL_API_TOKENS: z.string().default(''),
+
+  /**
+   * When `true`, /control/message rejects requests that don't carry a
+   * per-user Claude OAuth token. Used by shared deployments that don't want
+   * anonymous traffic burning the server's default Max quota. Default false:
+   * Benjamin's deployment falls back to the server-side
+   * CLAUDE_CODE_OAUTH_TOKEN when the client doesn't send one.
+   */
+  REQUIRE_USER_CLAUDE_TOKEN: z
+    .union([z.literal('true'), z.literal('false'), z.literal('1'), z.literal('0')])
+    .default('false')
+    .transform((v) => v === 'true' || v === '1'),
+
+  /**
+   * Public Nordrise-AI repo cloned into `${WORKSPACE_DIR}/codebase` at boot
+   * (and pulled every 30 min) so Sean can read his own source.
+   */
+  NORDRISE_REPO_URL: z
+    .string()
+    .url()
+    .default('https://github.com/BennyK-tech/Nordrise-AI.git'),
 });
 
 function mustNotHaveAnthropicApiKey() {

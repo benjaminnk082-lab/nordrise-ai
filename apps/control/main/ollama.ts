@@ -44,6 +44,13 @@ export interface StreamOptions {
   host: string;
   model: string;
   prompt: string;
+  /**
+   * Optional system prompt injected via Ollama's `system` parameter. Used to
+   * carry Sean's persona across providers — when a thread is routed locally,
+   * the desktop app fetches `/control/persona` and passes it here so Sean
+   * stays Sean even on Llama/Qwen.
+   */
+  system?: string;
   onChunk: (text: string) => void;
   onDone: () => void;
   onError: (message: string) => void;
@@ -60,6 +67,7 @@ export async function streamOllama(opts: StreamOptions): Promise<void> {
         model: opts.model,
         prompt: opts.prompt,
         stream: true,
+        ...(opts.system && opts.system.trim() ? { system: opts.system } : {}),
       }),
       ...(opts.signal ? { signal: opts.signal } : {}),
     });

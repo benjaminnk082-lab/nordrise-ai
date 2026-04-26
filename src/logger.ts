@@ -21,6 +21,12 @@ const REDACT_PATHS = [
   'connectorKeys.GITHUB_PERSONAL_ACCESS_TOKEN',
   'req.body.connectorKeys.FIRECRAWL_API_KEY',
   'req.body.connectorKeys.GITHUB_PERSONAL_ACCESS_TOKEN',
+  // Per-user Claude OAuth token — supplied in /control/message body and
+  // forwarded into the claude-code spawn env. Never persisted.
+  '*.claudeAuthToken',
+  'claudeAuthToken',
+  'req.body.claudeAuthToken',
+  'env.CLAUDE_CODE_OAUTH_TOKEN',
   'token',
   'oauthToken',
   'secret',

@@ -6,6 +6,7 @@
 
 import express, { Router, type Request, type Response, type NextFunction } from 'express';
 import { mkdirSync } from 'node:fs';
+import { exec } from 'node:child_process';
 import { join } from 'node:path';
 import { config, controlTokens } from './config.js';
 import { logger } from './logger.js';
@@ -21,6 +22,7 @@ import { makeVaultRouter } from './api/control/vaultRoute.js';
 import { makeRoutinesRouter } from './api/control/routinesRoute.js';
 import { startRoutinesRunner } from './api/control/routinesRunner.js';
 import { makeSuggestionsRouter } from './api/control/suggestionsRoute.js';
+import { makeControlPersonaRouter } from './api/control/personaRoute.js';
 import {
   startSuggestionsGenerator,
   stopSuggestionsGenerator,
@@ -142,6 +144,9 @@ controlRouter.use(
 );
 // Suggestion queue — Sean's autonomous proposals.
 controlRouter.use(makeSuggestionsRouter({ prisma, allowedTokens: controlTokens }));
+// Persona endpoint — desktop client fetches Sean's persona to inject as the
+// system prompt when routing a thread through Ollama (cross-model identity).
+controlRouter.use(makeControlPersonaRouter({ allowedTokens: controlTokens }));
 app.use('/control', controlRouter);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
@@ -167,6 +172,26 @@ async function main() {
   }
   const expirationSweep = startExpirationSweep(prisma);
   const cleanupTimer = startInboxCleanupInterval(inboxDir);
+
+  // Periodic codebase pull. The boot-time clone happens in
+  // docker-entrypoint.sh; this runtime tick keeps Sean's reference fresh
+  // throughout long uptimes. Failures are logged at WARN and never fatal —
+  // a stale reference is acceptable; a crashed gateway is not.
+  const codebaseDir = join(config.WORKSPACE_DIR, 'codebase');
+  const codebasePullTimer = setInterval(() => {
+    exec(
+      `git -C ${JSON.stringify(codebaseDir)} pull --quiet --depth=1 origin main`,
+      { timeout: 60_000 },
+      (err, _stdout, stderr) => {
+        if (err) {
+          logger.warn({ err: err.message, stderr: stderr.slice(0, 400) }, 'codebase periodic pull failed');
+        }
+      },
+    );
+  }, 30 * 60 * 1000);
+  // Don't block process exit on this timer.
+  codebasePullTimer.unref();
+
   const server = app.listen(config.PORT, () => {
     logger.info({ port: config.PORT, env: config.NODE_ENV }, 'gateway listening');
   });
@@ -175,6 +200,7 @@ async function main() {
     logger.info({ signal }, 'shutting down');
     clearInterval(cleanupTimer);
     clearInterval(expirationSweep);
+    clearInterval(codebasePullTimer);
     stopSuggestionsGenerator();
     server.close(() => {
       void prisma.$disconnect().finally(() => process.exit(0));

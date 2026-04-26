@@ -20,6 +20,23 @@ export interface ControlMessageRequest {
   text: string;
   attachments?: Array<{ fileId: string; workspacePath: string; filename: string }>;
   model?: ClaudeModelId;
+  /**
+   * Optional per-user Claude OAuth token (sk-ant-oat01-…). When set, the
+   * backend forwards it as `CLAUDE_CODE_OAUTH_TOKEN` into the claude-code
+   * spawn env, overriding the server-default token for that one call.
+   */
+  claudeAuthToken?: string;
+}
+
+/**
+ * `GET /control/persona` — Sean's live persona prompt. Used by the desktop
+ * app to inject Sean's identity via Ollama's `system` parameter when a
+ * thread is routed locally (cross-model identity).
+ */
+export interface PersonaResponse {
+  persona: string;
+  sha1: string;
+  length: number;
 }
 
 export interface HealthzResponse {
