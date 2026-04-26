@@ -59,8 +59,8 @@ RUN apt-get update \
 # Pin reasonable versions; per-request API keys arrive in env from the desktop
 # client (see ClaudeBridge env passthrough), never persisted server-side.
 RUN npm install -g --no-audit --no-fund \
-      firecrawl-mcp@^1.10.0 \
-      @modelcontextprotocol/server-github@^2024.11.25 \
+      firecrawl-mcp@^3.11.0 \
+      @modelcontextprotocol/server-github@^2025.4.8 \
     && npm cache clean --force
 
 # NOTE: Running as root. Railway volumes mount with root ownership and a
