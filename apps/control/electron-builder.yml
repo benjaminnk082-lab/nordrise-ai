@@ -30,7 +30,12 @@ win:
     - target: nsis
       arch: [x64]
   icon: ../installer/assets/nordrise-icon.ico
-  publisherName: "Nordrise"
+  # publisherName intentionally omitted: when set, electron-updater requires
+  # the downloaded installer's Authenticode signature to match this publisher.
+  # We don't have a code-signing certificate, so updates would always fail
+  # with "is not digitally signed". Removing publisherName disables that
+  # verification step. SmartScreen still warns once on first install (clear
+  # via "Run anyway"). When we get an EV cert, restore publisherName.
 
 nsis:
   oneClick: false
