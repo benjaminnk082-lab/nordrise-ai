@@ -13,11 +13,12 @@
  */
 
 import chokidar, { type FSWatcher } from 'chokidar';
-import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, readdir, writeFile, mkdir, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { join, relative, dirname } from 'node:path';
+import { join, relative, dirname, extname, basename } from 'node:path';
 import { net, BrowserWindow } from 'electron';
 import { getToken } from './keychain.js';
+import type { AppSettings } from './settingsStore.js';
 
 const TOKEN_SLOT = 'bearer';
 const DEFAULT_BACKEND = 'https://sean-production-4fcf.up.railway.app';
@@ -313,9 +314,41 @@ export async function listSeanNotes(): Promise<SeanNote[]> {
   }
 }
 
+async function fileExists(p: string): Promise<boolean> {
+  try {
+    await stat(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve a non-clobbering target path. If `<vault>/Sean/<notePath>` already
+ * exists, append ` (n)` before the extension and bump until we find a free
+ * slot. This is the contract the auto-merger and the manual adopt button both
+ * rely on — never silently overwrite a file the user (or a previous Sean run)
+ * has already placed in the vault.
+ */
+async function resolveNonClobberPath(target: string): Promise<string> {
+  if (!(await fileExists(target))) return target;
+  const dir = dirname(target);
+  const ext = extname(target);
+  const base = basename(target, ext);
+  for (let n = 2; n < 1000; n += 1) {
+    const candidate = join(dir, `${base} (${n})${ext}`);
+    if (!(await fileExists(candidate))) return candidate;
+  }
+  // Pathological fallback — append timestamp.
+  return join(dir, `${base}-${Date.now()}${ext}`);
+}
+
 /**
  * Copy a Sean-proposed note into the local vault under `<vault>/Sean/<path>`,
  * then dismiss it from the server queue. Throws if the note is not found.
+ *
+ * Never overwrites an existing file: collisions are renamed `name (2).md`,
+ * `name (3).md`, etc. so prior content is preserved.
  */
 export async function adoptSeanNote(
   notePath: string,
@@ -325,8 +358,9 @@ export async function adoptSeanNote(
   const notes = await listSeanNotes();
   const note = notes.find((n) => n.path === notePath);
   if (!note) throw new Error('note_not_found');
-  const target = join(vaultRoot, 'Sean', notePath);
-  await mkdir(dirname(target), { recursive: true });
+  const desired = join(vaultRoot, 'Sean', notePath);
+  await mkdir(dirname(desired), { recursive: true });
+  const target = await resolveNonClobberPath(desired);
   await writeFile(target, note.content, 'utf8');
 
   const token = await getToken(TOKEN_SLOT);
@@ -352,4 +386,68 @@ export async function dismissSeanNote(notePath: string): Promise<void> {
       headers: { Authorization: `Bearer ${token}` },
     },
   );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Auto-merge — periodic adoption of all sean-notes when permission is "auto".
+// ────────────────────────────────────────────────────────────────────────────
+
+let mergeTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Start a 60s interval that pulls all sean-notes and adopts them into the
+ * vault when:
+ *   - vault sync is enabled, AND
+ *   - settings.permissions.vaultWrite === 'auto'.
+ *
+ * The interval is gated on each tick — flipping the permission to `ask` or
+ * `block` simply skips subsequent ticks without restart. Safe to call
+ * multiple times; replaces any prior timer.
+ *
+ * Adoption uses {@link adoptSeanNote}, which never overwrites existing files
+ * (rename-on-conflict). On adoptions in a given tick we emit
+ * `vault:auto-merged` so the renderer can refresh its sean-notes panel.
+ */
+export function startSeanNotesAutoMerge(
+  getSettings: () => AppSettings,
+): void {
+  if (mergeTimer) clearInterval(mergeTimer);
+  mergeTimer = setInterval(() => {
+    void (async () => {
+      const s = getSettings();
+      if (!s.vault.enabled) return;
+      if (!s.vault.localPath) return;
+      if (s.permissions?.vaultWrite !== 'auto') return;
+      try {
+        const notes = await listSeanNotes();
+        if (notes.length === 0) return;
+        const adopted: string[] = [];
+        for (const note of notes) {
+          try {
+            const r = await adoptSeanNote(note.path, s.vault.localPath);
+            adopted.push(r.savedTo);
+          } catch {
+            // Per-note failures are non-fatal; continue with the rest.
+          }
+        }
+        if (adopted.length > 0) {
+          for (const w of BrowserWindow.getAllWindows()) {
+            w.webContents.send('vault:auto-merged', {
+              count: adopted.length,
+              paths: adopted,
+            });
+          }
+        }
+      } catch {
+        // Network blip — silent. Next tick will retry.
+      }
+    })();
+  }, 60_000);
+}
+
+export function stopSeanNotesAutoMerge(): void {
+  if (mergeTimer) {
+    clearInterval(mergeTimer);
+    mergeTimer = null;
+  }
 }

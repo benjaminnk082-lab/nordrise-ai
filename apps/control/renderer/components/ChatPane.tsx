@@ -291,6 +291,7 @@ export function ChatPane({
           streaming={state.streaming}
           attachments={attachments}
           onRemoveAttachment={handleRemove}
+          onFiles={handleFiles}
         />
       </div>
     </DropZone>

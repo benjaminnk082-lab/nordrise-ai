@@ -8,7 +8,12 @@ import { initAutoUpdate } from './autoUpdate.js';
 import { setPopupPreloadPath } from './popup.js';
 import { registerHotkeys, unregisterHotkeys } from './hotkeys.js';
 import { getSettings } from './settingsStore.js';
-import { startVaultSync, stopVaultSync } from './vaultSync.js';
+import {
+  startVaultSync,
+  stopVaultSync,
+  startSeanNotesAutoMerge,
+  stopSeanNotesAutoMerge,
+} from './vaultSync.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -88,6 +93,10 @@ app.whenReady().then(async () => {
   } catch (err) {
     console.warn('vault auto-start failed', err);
   }
+  // Sean-notes auto-merger ticks every 60s and re-checks settings each tick.
+  // It's a no-op when vault is disabled or vaultWrite permission != 'auto',
+  // so safe to start unconditionally at boot.
+  startSeanNotesAutoMerge(getSettings);
   setInterval(async () => {
     try {
       const url = process.env.NORDRISE_BACKEND_URL ?? 'https://sean-production-4fcf.up.railway.app';
@@ -104,6 +113,7 @@ app.whenReady().then(async () => {
 
 app.on('will-quit', () => {
   unregisterHotkeys();
+  stopSeanNotesAutoMerge();
   void stopVaultSync();
 });
 

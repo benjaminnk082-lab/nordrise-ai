@@ -19,6 +19,16 @@ export interface VaultSettings {
   syncInterval: number;
 }
 
+export type PermissionMode = 'auto' | 'ask' | 'block';
+
+export interface PermissionSettings {
+  vaultWrite: PermissionMode;
+  telegramSend: PermissionMode;
+  webSearch: PermissionMode;
+  githubAccess: PermissionMode;
+  shellExec: PermissionMode;
+}
+
 export interface AppSettings {
   defaultModel: DefaultModelChoice;
   ollamaEnabled: boolean;
@@ -28,6 +38,7 @@ export interface AppSettings {
   perThreadModel: Record<string, string>;
   connectors: ConnectorSettings;
   vault: VaultSettings;
+  permissions: PermissionSettings;
   theme: 'dark';
 }
 
@@ -46,6 +57,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
     enabled: false,
     localPath: '',
     syncInterval: 60_000,
+  },
+  permissions: {
+    vaultWrite: 'ask',
+    telegramSend: 'auto',
+    webSearch: 'auto',
+    githubAccess: 'auto',
+    shellExec: 'block',
   },
   theme: 'dark',
 };

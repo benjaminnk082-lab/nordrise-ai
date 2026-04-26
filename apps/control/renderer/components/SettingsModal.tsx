@@ -6,6 +6,8 @@ import {
   shellApi,
   type AppSettings,
   type DefaultModelChoice,
+  type PermissionMode,
+  type PermissionSettings,
 } from '../lib/settings';
 import {
   setStoredToken,
@@ -520,6 +522,18 @@ export function SettingsModal({
 
           <div className="settings-divider" />
 
+          {/* TILLATELSER */}
+          <PermissionsSection
+            permissions={settings.permissions}
+            onChange={(patch) =>
+              void updateSettings({
+                permissions: { ...settings.permissions, ...patch },
+              })
+            }
+          />
+
+          <div className="settings-divider" />
+
           {/* RUTINER */}
           <RoutinesSection />
 
@@ -855,6 +869,94 @@ function VaultSection({ enabled, localPath, onChange }: VaultSectionProps) {
           {busy ? 'Synker…' : 'Resync nå'}
         </button>
       </div>
+    </section>
+  );
+}
+
+interface PermissionRow {
+  key: keyof PermissionSettings;
+  label: string;
+  desc: string;
+}
+
+const PERMISSION_ROWS: PermissionRow[] = [
+  {
+    key: 'vaultWrite',
+    label: 'Skrive til Obsidian-vault',
+    desc: 'Sean’s notater kopieres automatisk inn i vaulten.',
+  },
+  {
+    key: 'telegramSend',
+    label: 'Sende Telegram-meldinger',
+    desc: 'Routine-notifikasjoner og proaktive meldinger.',
+  },
+  {
+    key: 'webSearch',
+    label: 'Web-søk',
+    desc: 'Bruk Firecrawl uten å spørre.',
+  },
+  {
+    key: 'githubAccess',
+    label: 'GitHub-tilgang',
+    desc: 'Lese repos / issues / PRs uten å spørre.',
+  },
+  {
+    key: 'shellExec',
+    label: 'Shell-kommandoer',
+    desc: 'Kjøre systemkommandoer (kommer i v0.2.4).',
+  },
+];
+
+const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'ask', label: 'Spør' },
+  { value: 'block', label: 'Blokker' },
+];
+
+interface PermissionsSectionProps {
+  permissions: PermissionSettings;
+  onChange: (patch: Partial<PermissionSettings>) => void;
+}
+
+function PermissionsSection({ permissions, onChange }: PermissionsSectionProps) {
+  return (
+    <section className="settings-section">
+      <h3 className="settings-section-title">Tillatelser</h3>
+      <p className="settings-section-sub">
+        Hvor proaktiv Sean får være. <strong>Auto</strong> kjører
+        uten å spørre, <strong>Spør</strong> ber om bekreftelse,{' '}
+        <strong>Blokker</strong> nekter handlingen helt. Bare vault-skriving
+        er håndhevet i v0.2.3 — resten lagres som hensikt og kobles
+        på backenden i v0.2.4.
+      </p>
+      {PERMISSION_ROWS.map((row) => (
+        <div key={row.key} className="perm-row">
+          <div>
+            <div className="perm-label">{row.label}</div>
+            <div className="perm-desc">{row.desc}</div>
+          </div>
+          <div className="perm-segment" role="radiogroup" aria-label={row.label}>
+            {PERMISSION_MODES.map((m) => {
+              const active = permissions[row.key] === m.value;
+              return (
+                <button
+                  key={m.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  className={
+                    'perm-segment-btn' +
+                    (active ? ' perm-segment-btn-active' : '')
+                  }
+                  onClick={() => onChange({ [row.key]: m.value } as Partial<PermissionSettings>)}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </section>
   );
 }

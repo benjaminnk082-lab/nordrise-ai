@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useRef, type ClipboardEvent, type KeyboardEvent } from 'react';
 
 export interface ComposerAttachment {
   localId: string;
@@ -20,6 +20,12 @@ export interface ComposerProps {
   placeholder?: string;
   attachments?: ComposerAttachment[];
   onRemoveAttachment?: (localId: string) => void;
+  /**
+   * Called when files are picked via the paperclip button or pasted as image
+   * data from the clipboard. Mirrors the DropZone callback so the same upload
+   * pipeline in ChatPane handles all three input paths.
+   */
+  onFiles?: (files: File[]) => void;
 }
 
 export function Composer({
@@ -32,8 +38,10 @@ export function Composer({
   placeholder = 'Spør Sean om hva som helst…',
   attachments = [],
   onRemoveAttachment,
+  onFiles,
 }: ComposerProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-resize textarea up to ~6 rows
   useEffect(() => {
@@ -60,6 +68,40 @@ export function Composer({
       e.preventDefault();
       if (!streaming && canSubmit) onSubmit();
     }
+  }
+
+  function handlePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    if (!onFiles) return;
+    const items = Array.from(e.clipboardData?.items ?? []);
+    const imageFiles: File[] = [];
+    for (const item of items) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          // Clipboard images come in as `image.png` with no useful name —
+          // give them a timestamped one so the chip and inbox path are sane.
+          const ext = item.type.split('/')[1] ?? 'png';
+          const named = new File(
+            [file],
+            `paste-${Date.now()}.${ext}`,
+            { type: file.type },
+          );
+          imageFiles.push(named);
+        }
+      }
+    }
+    // Only intercept when there's an image item — preserve normal text paste.
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      onFiles(imageFiles);
+    }
+  }
+
+  function handlePickerChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length && onFiles) onFiles(files);
+    // Reset so picking the same file twice in a row still fires onChange.
+    e.target.value = '';
   }
 
   const hasUploading = attachments.some((a) => a.status === 'uploading');
@@ -100,12 +142,48 @@ export function Composer({
         </div>
       )}
       <div className="composer">
+        {onFiles && (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              style={{ display: 'none' }}
+              onChange={handlePickerChange}
+            />
+            <button
+              type="button"
+              className="composer-icon-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled}
+              title="Legg ved fil"
+              aria-label="Legg ved fil"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M21.44 11.05l-9.19 9.19a5.5 5.5 0 1 1-7.78-7.78l9.19-9.19a3.67 3.67 0 1 1 5.19 5.19l-9.2 9.19a1.83 1.83 0 1 1-2.59-2.59l8.49-8.49"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </>
+        )}
         <textarea
           ref={ref}
           className="composer-input"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKey}
+          onPaste={handlePaste}
           placeholder={placeholder}
           rows={1}
           disabled={disabled}

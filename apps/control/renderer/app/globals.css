@@ -1048,6 +1048,29 @@ input:-webkit-autofill:focus {
 .send-btn:active { transform: translateY(0) scale(0.96); }
 .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; filter: none; }
 
+.composer-icon-btn {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: rgba(244, 244, 247, 0.55);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease;
+  margin-bottom: 2px;
+}
+.composer-icon-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.06);
+}
+.composer-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .send-btn-stop {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.0) 35%),
@@ -2744,4 +2767,60 @@ input:-webkit-autofill:focus {
 }
 .suggestion-card.suggestion-done {
   opacity: 0.6;
+}
+
+/* ============================================================
+   Permissions (settings — Tillatelser)
+   ============================================================ */
+
+.perm-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.perm-row:last-child { border-bottom: 0; }
+
+.perm-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #f4f4f7;
+}
+
+.perm-desc {
+  font-size: 11px;
+  color: rgba(244, 244, 247, 0.5);
+  margin-top: 2px;
+}
+
+.perm-segment {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.perm-segment-btn {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 0;
+  background: transparent;
+  color: rgba(244, 244, 247, 0.55);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease;
+}
+.perm-segment-btn:hover:not(.perm-segment-btn-active) {
+  color: #ffffff;
+}
+.perm-segment-btn-active {
+  background: linear-gradient(135deg, #a78bff, #7c5cff);
+  color: #ffffff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    0 4px 10px rgba(124, 92, 255, 0.30);
 }

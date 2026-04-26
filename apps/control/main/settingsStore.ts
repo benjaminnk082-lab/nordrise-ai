@@ -45,6 +45,33 @@ export interface VaultSettings {
   syncInterval: number;
 }
 
+/**
+ * Permission policy per action class.
+ *
+ * - `auto`   — Sean / the desktop runs the action without confirmation.
+ * - `ask`    — user must approve in the UI before the action runs.
+ * - `block`  — action is denied outright.
+ *
+ * In v0.2.3 only `vaultWrite` is enforced client-side (it gates the
+ * sean-notes auto-merger). The other entries are persisted today so the user
+ * can express intent, and v0.2.4 will plumb them through to the backend so
+ * Sean's tool calls respect them too.
+ */
+export type PermissionMode = 'auto' | 'ask' | 'block';
+
+export interface PermissionSettings {
+  /** Auto-copy `/app/workspace/sean-notes/` files into `<vault>/Sean/`. */
+  vaultWrite: PermissionMode;
+  /** TODO(v0.2.4): backend-enforced. Routine notifications via Telegram. */
+  telegramSend: PermissionMode;
+  /** TODO(v0.2.4): backend-enforced. Firecrawl scrape/search calls. */
+  webSearch: PermissionMode;
+  /** TODO(v0.2.4): backend-enforced. GitHub MCP read access. */
+  githubAccess: PermissionMode;
+  /** TODO(v0.2.4): backend-enforced. Shell exec. Reserved — default block. */
+  shellExec: PermissionMode;
+}
+
 export interface AppSettings {
   defaultModel: DefaultModelChoice;
   ollamaEnabled: boolean;
@@ -56,6 +83,7 @@ export interface AppSettings {
   perThreadModel: Record<string, string>;
   connectors: ConnectorSettings;
   vault: VaultSettings;
+  permissions: PermissionSettings;
   theme: 'dark';
 }
 
@@ -85,6 +113,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
     enabled: false,
     localPath: defaultVaultPath(),
     syncInterval: 60_000,
+  },
+  permissions: {
+    vaultWrite: 'ask',
+    telegramSend: 'auto',
+    webSearch: 'auto',
+    githubAccess: 'auto',
+    shellExec: 'block',
   },
   theme: 'dark',
 };
@@ -130,6 +165,10 @@ function load(): AppSettings {
         ...DEFAULT_SETTINGS.vault,
         ...(parsed.vault ?? {}),
       },
+      permissions: {
+        ...DEFAULT_SETTINGS.permissions,
+        ...(parsed.permissions ?? {}),
+      },
     };
     return cached;
   } catch {
@@ -171,6 +210,10 @@ export function setSettings(patch: Partial<AppSettings>): AppSettings {
     vault: {
       ...current.vault,
       ...(patch.vault ?? {}),
+    },
+    permissions: {
+      ...current.permissions,
+      ...(patch.permissions ?? {}),
     },
   };
   cached = next;
