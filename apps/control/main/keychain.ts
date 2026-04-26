@@ -1,9 +1,8 @@
 import { safeStorage, app } from 'electron';
 import { join } from 'node:path';
-import { writeFile, readFile } from 'node:fs/promises';
+import { writeFile, readFile, unlink } from 'node:fs/promises';
 
 const SERVICE = 'nordrise-control';
-const ACCOUNT = 'bearer';
 
 let keytarMod: typeof import('keytar') | null = null;
 let keytarLoaded = false;
@@ -18,21 +17,25 @@ async function tryKeytar() {
   return keytarMod;
 }
 
-export async function setToken(token: string): Promise<void> {
-  const k = await tryKeytar();
-  if (k) { await k.setPassword(SERVICE, ACCOUNT, token); return; }
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('no_secure_storage');
-  const blob = safeStorage.encryptString(token);
-  const path = join(app.getPath('userData'), 'token.bin');
-  await writeFile(path, blob);
+function fallbackPath(account: string): string {
+  // Sanitize account so it can't escape userData (defensive — names come from typed enum).
+  const safe = account.replace(/[^a-zA-Z0-9_:-]/g, '_');
+  return join(app.getPath('userData'), `token-${safe}.bin`);
 }
 
-export async function getToken(): Promise<string | null> {
+export async function setToken(account: string, token: string): Promise<void> {
   const k = await tryKeytar();
-  if (k) return k.getPassword(SERVICE, ACCOUNT);
+  if (k) { await k.setPassword(SERVICE, account, token); return; }
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('no_secure_storage');
+  const blob = safeStorage.encryptString(token);
+  await writeFile(fallbackPath(account), blob);
+}
+
+export async function getToken(account: string): Promise<string | null> {
+  const k = await tryKeytar();
+  if (k) return k.getPassword(SERVICE, account);
   try {
-    const path = join(app.getPath('userData'), 'token.bin');
-    const blob = await readFile(path);
+    const blob = await readFile(fallbackPath(account));
     if (!safeStorage.isEncryptionAvailable()) return null;
     return safeStorage.decryptString(blob);
   } catch {
@@ -40,11 +43,9 @@ export async function getToken(): Promise<string | null> {
   }
 }
 
-export async function deleteToken(): Promise<void> {
+export async function deleteToken(account: string): Promise<void> {
   const k = await tryKeytar();
-  if (k) { await k.deletePassword(SERVICE, ACCOUNT); return; }
-  try {
-    const { unlink } = await import('node:fs/promises');
-    await unlink(join(app.getPath('userData'), 'token.bin'));
-  } catch { /* idempotent */ }
+  if (k) { await k.deletePassword(SERVICE, account); return; }
+  try { await unlink(fallbackPath(account)); }
+  catch { /* idempotent */ }
 }

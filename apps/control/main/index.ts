@@ -1,5 +1,5 @@
-import { app, BrowserWindow } from 'electron';
-import { fileURLToPath } from 'node:url';
+import { app, BrowserWindow, protocol, net } from 'electron';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mainWindowOptions } from './windows.js';
 import { registerIpc } from './ipc.js';
@@ -7,6 +7,22 @@ import { initTray, setTrayStatus } from './tray.js';
 import { initAutoUpdate } from './autoUpdate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Register the app:// scheme as a standard, secure scheme BEFORE app.whenReady().
+// This is required so the renderer can resolve absolute Next.js paths like /_next/static/...
+// which 404 under file:// protocol (browser fetches from filesystem root, not app dir).
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'app',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
 
 let mainWin: BrowserWindow | null = null;
 
@@ -30,8 +46,7 @@ async function createMainWindow() {
   if (process.env.NODE_ENV === 'development') {
     await mainWin.loadURL('http://localhost:4001');
   } else {
-    // loadFile handles Windows paths with spaces; loadURL('file://...') doesn't reliably.
-    await mainWin.loadFile(join(__dirname, '..', 'renderer', 'index.html'));
+    await mainWin.loadURL('app://-/index.html');
   }
 
   mainWin.webContents.on('did-fail-load', (_e, errorCode, errorDescription, validatedURL) => {
@@ -42,6 +57,17 @@ async function createMainWindow() {
 }
 
 app.whenReady().then(async () => {
+  // Register the app:// protocol handler. Maps app://-/<path> → dist/renderer/<path>.
+  // The host segment is ignored ("-" is just a placeholder; some Electron versions
+  // reject empty hosts in standard URLs).
+  protocol.handle('app', (request) => {
+    const url = new URL(request.url);
+    let pathname = decodeURIComponent(url.pathname);
+    if (pathname === '/' || pathname === '') pathname = '/index.html';
+    const filePath = join(__dirname, '..', 'renderer', pathname);
+    return net.fetch(pathToFileURL(filePath).toString());
+  });
+
   registerIpc();
   await createMainWindow();
   initTray(() => mainWin);
