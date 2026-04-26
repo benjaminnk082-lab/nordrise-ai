@@ -12,6 +12,8 @@ import { QuickTaskPalette } from './QuickTaskPalette';
 import { QuickTaskManager } from './QuickTaskManager';
 import { SettingsModal } from './SettingsModal';
 import { RoutinesPill } from './RoutinesPill';
+import { SeanNotesPanel } from './SeanNotesPanel';
+import { vaultApi } from '../lib/vault';
 import { quitAndInstall, getPendingUpdate } from '../lib/bridge';
 import {
   settingsApi,
@@ -49,6 +51,8 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [seanNotesOpen, setSeanNotesOpen] = useState(false);
+  const [seanNotesCount, setSeanNotesCount] = useState(0);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [ollamaAvailable, setOllamaAvailable] = useState(false);
 
@@ -71,6 +75,32 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
       cancelled = true;
     };
   }, [settings.ollamaEnabled, settings.ollamaHost]);
+
+  // Poll Sean's pending-notes count every 30s so the footer pill nudges
+  // the user when something new shows up. Skips polling if vault sync is off
+  // (no notes will appear) or if the document isn't visible.
+  useEffect(() => {
+    if (!settings.vault.enabled) {
+      setSeanNotesCount(0);
+      return;
+    }
+    let cancelled = false;
+    async function refresh() {
+      if (document.hidden) return;
+      try {
+        const list = await vaultApi.listSeanNotes();
+        if (!cancelled) setSeanNotesCount(list.length);
+      } catch {
+        // ignore — pill stays at last known value
+      }
+    }
+    void refresh();
+    const t = setInterval(refresh, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [settings.vault.enabled]);
 
   useEffect(() => {
     const off = window.nordrise.on('app:update-downloaded', (info: unknown) => {
@@ -357,6 +387,31 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
             Quick-tasks
           </button>
           <RoutinesPill />
+          {settings.vault.enabled && (
+            <button
+              type="button"
+              onClick={() => setSeanNotesOpen(true)}
+              className="link-button"
+              title="Forslag fra Sean"
+            >
+              Sean&apos;s notater
+              {seanNotesCount > 0 && (
+                <span
+                  style={{
+                    marginLeft: 6,
+                    padding: '1px 6px',
+                    borderRadius: 999,
+                    background: 'linear-gradient(90deg,#a78bff,#7c5cff)',
+                    color: '#0b0a13',
+                    fontSize: 10,
+                    fontWeight: 600,
+                  }}
+                >
+                  {seanNotesCount}
+                </span>
+              )}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -387,6 +442,19 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
         onSettingsChange={setSettings}
         version={version}
         onLogout={onLogout}
+      />
+      <SeanNotesPanel
+        open={seanNotesOpen}
+        onClose={() => setSeanNotesOpen(false)}
+        vaultRoot={settings.vault.localPath}
+        onAfterAction={async () => {
+          try {
+            const list = await vaultApi.listSeanNotes();
+            setSeanNotesCount(list.length);
+          } catch {
+            /* ignore */
+          }
+        }}
       />
     </div>
   );

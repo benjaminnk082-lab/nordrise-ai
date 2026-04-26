@@ -13,6 +13,12 @@ export interface ConnectorSettings {
   github: { enabled: boolean; token: string };
 }
 
+export interface VaultSettings {
+  enabled: boolean;
+  localPath: string;
+  syncInterval: number;
+}
+
 export interface AppSettings {
   defaultModel: DefaultModelChoice;
   ollamaEnabled: boolean;
@@ -21,6 +27,7 @@ export interface AppSettings {
   ollamaModel: string;
   perThreadModel: Record<string, string>;
   connectors: ConnectorSettings;
+  vault: VaultSettings;
   theme: 'dark';
 }
 
@@ -34,6 +41,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   connectors: {
     firecrawl: { enabled: false, apiKey: '' },
     github: { enabled: false, token: '' },
+  },
+  vault: {
+    enabled: false,
+    localPath: '',
+    syncInterval: 60_000,
   },
   theme: 'dark',
 };

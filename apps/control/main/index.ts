@@ -7,6 +7,8 @@ import { initTray, setTrayStatus } from './tray.js';
 import { initAutoUpdate } from './autoUpdate.js';
 import { setPopupPreloadPath } from './popup.js';
 import { registerHotkeys, unregisterHotkeys } from './hotkeys.js';
+import { getSettings } from './settingsStore.js';
+import { startVaultSync, stopVaultSync } from './vaultSync.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -75,6 +77,17 @@ app.whenReady().then(async () => {
   await createMainWindow();
   initTray(() => mainWin);
   registerHotkeys(() => mainWin);
+
+  // Auto-start vault sync if user previously enabled it. Failure is
+  // non-fatal — error surfaces via the `vault:status` broadcast.
+  try {
+    const s = getSettings();
+    if (s.vault.enabled && s.vault.localPath) {
+      void startVaultSync(s.vault.localPath);
+    }
+  } catch (err) {
+    console.warn('vault auto-start failed', err);
+  }
   setInterval(async () => {
     try {
       const url = process.env.NORDRISE_BACKEND_URL ?? 'https://sean-production-4fcf.up.railway.app';
@@ -89,7 +102,10 @@ app.whenReady().then(async () => {
   initAutoUpdate();
 });
 
-app.on('will-quit', () => unregisterHotkeys());
+app.on('will-quit', () => {
+  unregisterHotkeys();
+  void stopVaultSync();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

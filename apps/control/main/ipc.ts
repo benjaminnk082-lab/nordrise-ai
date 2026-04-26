@@ -1,4 +1,4 @@
-import { ipcMain, net, app, shell, Notification, BrowserWindow } from 'electron';
+import { ipcMain, net, app, shell, dialog, Notification, BrowserWindow } from 'electron';
 import { setToken, getToken, deleteToken } from './keychain.js';
 import { getPendingUpdateVersion, quitAndInstall, getUpdateStatus, getUpdateLog, manualCheck } from './autoUpdate.js';
 import { getStore, type QuickTaskInput } from './store.js';
@@ -10,6 +10,15 @@ import {
   type AppSettings,
 } from './settingsStore.js';
 import { detectOllama, listOllamaModels, streamOllama } from './ollama.js';
+import {
+  startVaultSync,
+  stopVaultSync,
+  fullSync,
+  getVaultStatus,
+  listSeanNotes,
+  adoptSeanNote,
+  dismissSeanNote,
+} from './vaultSync.js';
 
 const DEFAULT_BACKEND = 'https://sean-production-4fcf.up.railway.app';
 const TOKEN_SLOT = 'bearer';
@@ -407,6 +416,30 @@ export function registerIpc(): void {
       n.show();
     },
   );
+
+  // Obsidian-vault sync (PC -> Sean) + Sean's notes proposals.
+  ipcMain.handle('vault:status', () => getVaultStatus());
+  ipcMain.handle('vault:start', async (_e, vaultPath: string) => {
+    await startVaultSync(vaultPath);
+  });
+  ipcMain.handle('vault:stop', async () => {
+    await stopVaultSync();
+  });
+  ipcMain.handle('vault:resync', async (_e, vaultPath: string) => {
+    await fullSync(vaultPath);
+  });
+  ipcMain.handle('vault:pick-folder', async () => {
+    const r = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+    if (r.canceled) return null;
+    return r.filePaths[0] ?? null;
+  });
+  ipcMain.handle('vault:list-sean-notes', () => listSeanNotes());
+  ipcMain.handle(
+    'vault:adopt-note',
+    (_e, payload: { path: string; vaultRoot: string }) =>
+      adoptSeanNote(payload.path, payload.vaultRoot),
+  );
+  ipcMain.handle('vault:dismiss-note', (_e, p: string) => dismissSeanNote(p));
 
   ipcMain.handle(
     'popup:reply',

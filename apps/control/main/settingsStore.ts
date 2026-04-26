@@ -9,6 +9,7 @@
 import { app } from 'electron';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { homedir } from 'node:os';
 
 export type ClaudeModelId =
   | 'claude-opus-4-7'
@@ -31,6 +32,19 @@ export interface ConnectorSettings {
   github: { enabled: boolean; token: string };
 }
 
+/**
+ * Obsidian-vault sync settings.
+ * - `localPath` is an absolute path on Benjamin's PC.
+ * - `syncInterval` polls the sean-notes endpoint to surface new proposals.
+ *   The actual file watcher (chokidar) reacts in real time; this is just for
+ *   the suggestion-back queue.
+ */
+export interface VaultSettings {
+  enabled: boolean;
+  localPath: string;
+  syncInterval: number;
+}
+
 export interface AppSettings {
   defaultModel: DefaultModelChoice;
   ollamaEnabled: boolean;
@@ -41,7 +55,19 @@ export interface AppSettings {
   /** controlSessionId -> model id (Claude id, "auto", or "ollama:<name>"). */
   perThreadModel: Record<string, string>;
   connectors: ConnectorSettings;
+  vault: VaultSettings;
   theme: 'dark';
+}
+
+function defaultVaultPath(): string {
+  // Default candidate; only used if the folder actually exists. Otherwise we
+  // leave the field empty so the picker shows immediately.
+  try {
+    const candidate = join(homedir(), 'Documents', 'ObsidianVault');
+    return existsSync(candidate) ? candidate : '';
+  } catch {
+    return '';
+  }
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -54,6 +80,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   connectors: {
     firecrawl: { enabled: false, apiKey: '' },
     github: { enabled: false, token: '' },
+  },
+  vault: {
+    enabled: false,
+    localPath: defaultVaultPath(),
+    syncInterval: 60_000,
   },
   theme: 'dark',
 };
@@ -95,6 +126,10 @@ function load(): AppSettings {
           ...(parsed.connectors?.github ?? {}),
         },
       },
+      vault: {
+        ...DEFAULT_SETTINGS.vault,
+        ...(parsed.vault ?? {}),
+      },
     };
     return cached;
   } catch {
@@ -132,6 +167,10 @@ export function setSettings(patch: Partial<AppSettings>): AppSettings {
         ...current.connectors.github,
         ...(patch.connectors?.github ?? {}),
       },
+    },
+    vault: {
+      ...current.vault,
+      ...(patch.vault ?? {}),
     },
   };
   cached = next;

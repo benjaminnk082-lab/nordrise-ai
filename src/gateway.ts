@@ -17,6 +17,7 @@ import { makeControlMessageRouter } from './api/control/messageRoute.js';
 import { makeControlSessionsRouter } from './api/control/sessionsRoute.js';
 import { makeControlHistoryRouter } from './api/control/historyRoute.js';
 import { makeControlUploadRouter } from './api/control/uploadRoute.js';
+import { makeVaultRouter } from './api/control/vaultRoute.js';
 import { makeRoutinesRouter } from './api/control/routinesRoute.js';
 import { startRoutinesRunner } from './api/control/routinesRunner.js';
 import { startInboxCleanupInterval } from './api/control/inboxCleanup.js';
@@ -87,7 +88,11 @@ app.post('/telegram', async (req: Request, res: Response) => {
 // the upload sub-router itself, so it's scoped to upload errors only and won't
 // catch errors from the other routers.
 const inboxDir = join(config.WORKSPACE_DIR, 'inbox');
+const vaultDir = join(config.WORKSPACE_DIR, 'vault');
+const seanNotesDir = join(config.WORKSPACE_DIR, 'sean-notes');
 mkdirSync(inboxDir, { recursive: true });
+mkdirSync(vaultDir, { recursive: true });
+mkdirSync(seanNotesDir, { recursive: true });
 
 const controlRouter = Router();
 controlRouter.use(
@@ -106,6 +111,14 @@ controlRouter.use(
     inboxDir,
     allowedTokens: controlTokens,
     maxFileSizeBytes: 25 * 1024 * 1024,
+  }),
+);
+controlRouter.use(
+  makeVaultRouter({
+    vaultDir,
+    seanNotesDir,
+    allowedTokens: controlTokens,
+    maxFileBytes: 10 * 1024 * 1024,
   }),
 );
 // Routines (recurring tasks) — first whitelisted Telegram id is treated as

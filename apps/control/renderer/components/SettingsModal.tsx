@@ -19,6 +19,7 @@ import {
   type UpdateStatus,
 } from '../lib/bridge';
 import { RoutinesSection } from './RoutinesSection';
+import { vaultApi, formatRelative, type VaultStatus } from '../lib/vault';
 
 export interface SettingsModalProps {
   open: boolean;
@@ -506,6 +507,19 @@ export function SettingsModal({
 
           <div className="settings-divider" />
 
+          {/* OBSIDIAN-VAULT */}
+          <VaultSection
+            enabled={settings.vault.enabled}
+            localPath={settings.vault.localPath}
+            onChange={(patch) =>
+              void updateSettings({
+                vault: { ...settings.vault, ...patch },
+              })
+            }
+          />
+
+          <div className="settings-divider" />
+
           {/* RUTINER */}
           <RoutinesSection />
 
@@ -712,4 +726,135 @@ function statusTone(s: UpdateStatus): string {
   if (s.kind === 'downloaded' || s.kind === 'available') return 'tone-accent';
   if (s.kind === 'downloading' || s.kind === 'checking') return 'tone-warn';
   return '';
+}
+
+interface VaultSectionProps {
+  enabled: boolean;
+  localPath: string;
+  onChange: (patch: { enabled?: boolean; localPath?: string }) => void;
+}
+
+function VaultSection({ enabled, localPath, onChange }: VaultSectionProps) {
+  const [status, setStatus] = useState<VaultStatus>({
+    enabled: false,
+    lastSyncAt: 0,
+    fileCount: 0,
+    pending: 0,
+  });
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void vaultApi.status().then(setStatus);
+    const off = window.nordrise.on('vault:status', (s: unknown) => {
+      setStatus(s as VaultStatus);
+    });
+    const t = setInterval(() => void vaultApi.status().then(setStatus), 5000);
+    return () => {
+      off();
+      clearInterval(t);
+    };
+  }, []);
+
+  async function pickFolder() {
+    const p = await vaultApi.pickFolder();
+    if (p) onChange({ localPath: p });
+  }
+
+  async function toggleEnabled(v: boolean) {
+    setBusy(true);
+    try {
+      onChange({ enabled: v });
+      if (v) {
+        if (!localPath) {
+          // refuse to start without a path; flip the toggle back next render
+          // when settings re-arrive.
+          onChange({ enabled: false });
+          return;
+        }
+        await vaultApi.start(localPath);
+      } else {
+        await vaultApi.stop();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resyncNow() {
+    if (!localPath) return;
+    setBusy(true);
+    try {
+      await vaultApi.resync(localPath);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="settings-section">
+      <h3 className="settings-section-title">Obsidian-vault</h3>
+      <p className="settings-section-sub">
+        Sync av lokal Obsidian-vault til Sean. Sean leser den som kontekst,
+        men kan ikke skrive direkte tilbake. Forslag fra Sean dukker opp i
+        "Sean&apos;s notater"-panelet i hovedvinduet, hvor du kan godkjenne
+        med ett klikk.
+      </p>
+
+      <div className="settings-row">
+        <label className="settings-field" style={{ flex: 1 }}>
+          <span className="settings-field-label">Mappe på PC</span>
+          <input
+            type="text"
+            className="settings-field-input"
+            value={localPath}
+            spellCheck={false}
+            placeholder="C:\Users\…\Documents\ObsidianVault"
+            onChange={(e) => onChange({ localPath: e.target.value })}
+          />
+        </label>
+        <button
+          type="button"
+          className="qt-btn-secondary"
+          onClick={() => void pickFolder()}
+        >
+          Velg…
+        </button>
+      </div>
+
+      <label className="settings-toggle">
+        <input
+          type="checkbox"
+          checked={enabled}
+          disabled={busy || !localPath}
+          onChange={(e) => void toggleEnabled(e.target.checked)}
+        />
+        <span>Aktivér sync</span>
+      </label>
+
+      <div
+        className={`settings-status settings-status-${
+          status.error ? 'fail' : status.enabled ? 'ok' : 'idle'
+        }`}
+      >
+        {status.error
+          ? `✗ ${status.error}`
+          : status.enabled
+            ? `✓ ${status.fileCount} fil${status.fileCount === 1 ? '' : 'er'}` +
+              ` · sist synket ${formatRelative(status.lastSyncAt)}` +
+              (status.pending > 0 ? ` · ${status.pending} venter` : '')
+            : 'Inaktiv'}
+      </div>
+
+      <div className="settings-actions-row" style={{ marginTop: 10 }}>
+        <button
+          type="button"
+          className="qt-btn-secondary"
+          disabled={busy || !enabled || !localPath}
+          onClick={() => void resyncNow()}
+        >
+          {busy ? 'Synker…' : 'Resync nå'}
+        </button>
+      </div>
+    </section>
+  );
 }
