@@ -103,6 +103,12 @@ export interface SendOpts {
    * via the Ollama IPC bridge and bypasses Sean entirely.
    */
   model?: string;
+  /**
+   * MCP connector keys (FIRECRAWL_API_KEY, GITHUB_PERSONAL_ACCESS_TOKEN).
+   * Forwarded ephemerally with the message. Sean injects them into the
+   * claude-code subprocess env. Never persisted backend-side.
+   */
+  connectorKeys?: Record<string, string>;
   onFrame: (f: SseFrame) => void;
   onDone: () => void;
 }
@@ -142,6 +148,7 @@ export function sendMessageStream(opts: SendOpts): { abort: () => void } {
     controlSessionId: opts.controlSessionId,
     attachments: opts.attachments,
     model: opts.model,
+    connectorKeys: opts.connectorKeys,
   });
   return {
     abort: () => {

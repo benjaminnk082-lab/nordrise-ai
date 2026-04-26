@@ -12,6 +12,11 @@ const ModelEnum = z.enum([
   'claude-haiku-4-5',
 ]);
 
+const ConnectorKeysSchema = z.object({
+  FIRECRAWL_API_KEY: z.string().min(1).max(512).optional(),
+  GITHUB_PERSONAL_ACCESS_TOKEN: z.string().min(1).max(512).optional(),
+});
+
 const BodySchema = z.object({
   controlSessionId: z.string().nullable(),
   text: z.string().min(1).max(20_000),
@@ -26,6 +31,12 @@ const BodySchema = z.object({
     .max(5)
     .optional(),
   model: ModelEnum.optional(),
+  /**
+   * Per-request MCP connector keys. Travel ephemerally with the message and
+   * are forwarded into claude-code's spawn env where the MCP server config
+   * (mcp-config/claude-settings.json) substitutes them. NEVER persisted.
+   */
+  connectorKeys: ConnectorKeysSchema.optional(),
 });
 
 export interface MessageRouterDeps {
@@ -88,10 +99,21 @@ async function handle(req: Request, res: Response, deps: MessageRouterDeps): Pro
   logger.info({ controlSessionId: session.id, hasAttachments: !!body.attachments?.length }, 'control.message.start');
 
   try {
+    // Build the per-request env for the bridge. Only include keys that the
+    // client actually sent. We never log them — see logger.ts redact paths.
+    const env: Record<string, string> = {};
+    if (body.connectorKeys?.FIRECRAWL_API_KEY) {
+      env.FIRECRAWL_API_KEY = body.connectorKeys.FIRECRAWL_API_KEY;
+    }
+    if (body.connectorKeys?.GITHUB_PERSONAL_ACCESS_TOKEN) {
+      env.GITHUB_PERSONAL_ACCESS_TOKEN = body.connectorKeys.GITHUB_PERSONAL_ACCESS_TOKEN;
+    }
+
     const result = await bridge.invoke({
       message: prompt,
       sessionId: session.claudeSessionId,
       ...(body.model ? { model: body.model } : {}),
+      ...(Object.keys(env).length ? { env } : {}),
       signal: ac.signal,
     });
 

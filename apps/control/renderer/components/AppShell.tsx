@@ -15,6 +15,7 @@ import { quitAndInstall, getPendingUpdate } from '../lib/bridge';
 import {
   settingsApi,
   ollamaApi,
+  buildConnectorKeys,
   DEFAULT_SETTINGS,
   type AppSettings,
 } from '../lib/settings';
@@ -207,11 +208,17 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
             })
           : perThread;
 
+      // Only forward connector keys if Sean (claude-code) will run — Ollama
+      // sub-stream bypasses Sean entirely and there's no MCP integration there.
+      const isOllama = typeof routed === 'string' && routed.startsWith('ollama:');
+      const connectorKeys = isOllama ? undefined : buildConnectorKeys(settings);
+
       stream.start({
         controlSessionId: sessionId,
         text,
         attachments: attachments.length ? attachments : undefined,
         ...(routed ? { model: routed } : {}),
+        ...(connectorKeys ? { connectorKeys } : {}),
       });
     },
     [active, send, stream, settings, ollamaAvailable],

@@ -179,7 +179,8 @@ export function ChatPane({
             )}
           </div>
           {sessionId && (
-            <div className="model-chip-wrap">
+            <div className="pane-header-chips">
+              <div className="model-chip-wrap">
               <button
                 type="button"
                 className="model-chip"
@@ -223,6 +224,27 @@ export function ChatPane({
                   )}
                 </div>
               )}
+              </div>
+              {settings.connectors?.firecrawl?.enabled &&
+                settings.connectors.firecrawl.apiKey.trim() && (
+                  <span
+                    className="connector-chip"
+                    title="Firecrawl: web search/scrape aktiv"
+                  >
+                    <span aria-hidden="true">🌐</span>
+                    Firecrawl
+                  </span>
+                )}
+              {settings.connectors?.github?.enabled &&
+                settings.connectors.github.token.trim() && (
+                  <span
+                    className="connector-chip"
+                    title="GitHub: issues / PRs / kode-search aktiv"
+                  >
+                    <span aria-hidden="true">🐙</span>
+                    GitHub
+                  </span>
+                )}
             </div>
           )}
         </div>

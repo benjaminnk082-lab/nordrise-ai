@@ -32,6 +32,7 @@ export function useStream(callbacks: UseStreamCallbacks) {
       text: string;
       attachments?: Array<{ fileId: string; workspacePath: string; filename: string }>;
       model?: string;
+      connectorKeys?: Record<string, string>;
     }) => {
       if (handleRef.current) handleRef.current.abort();
       const handle = sendMessageStream({
@@ -39,6 +40,7 @@ export function useStream(callbacks: UseStreamCallbacks) {
         text: opts.text,
         attachments: opts.attachments,
         ...(opts.model ? { model: opts.model } : {}),
+        ...(opts.connectorKeys ? { connectorKeys: opts.connectorKeys } : {}),
         onFrame: (f: SseFrame) => {
           const cb = cbRef.current;
           switch (f.event) {

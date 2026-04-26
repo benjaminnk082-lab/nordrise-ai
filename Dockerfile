@@ -55,9 +55,22 @@ RUN apt-get update \
     && npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
     && npm cache clean --force
 
+# MCP servers (Sean uses these from claude-code via /app/.claude/settings.json).
+# Pin reasonable versions; per-request API keys arrive in env from the desktop
+# client (see ClaudeBridge env passthrough), never persisted server-side.
+RUN npm install -g --no-audit --no-fund \
+      firecrawl-mcp@^1.10.0 \
+      @modelcontextprotocol/server-github@^2024.11.25 \
+    && npm cache clean --force
+
 # NOTE: Running as root. Railway volumes mount with root ownership and a
 # non-root user couldn't write to them without extra init work.
 RUN mkdir -p /app/.claude /app/workspace
+
+# claude-code reads ~/.claude/settings.json by default; HOME=/app, so this
+# is the path it'll pick up. The file references env vars with ${VAR} which
+# claude-code resolves at spawn time from the inherited environment.
+COPY mcp-config/claude-settings.json /app/.claude/settings.json
 
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev --no-audit --no-fund \

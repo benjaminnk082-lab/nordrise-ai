@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   settingsApi,
   ollamaApi,
+  shellApi,
   type AppSettings,
   type DefaultModelChoice,
 } from '../lib/settings';
@@ -60,6 +61,9 @@ export function SettingsModal({
     | { kind: 'ok' }
   >({ kind: 'idle' });
   const [pendingVersion, setPendingVersion] = useState<string | null>(null);
+  const [showFirecrawlKey, setShowFirecrawlKey] = useState(false);
+  const [showGithubKey, setShowGithubKey] = useState(false);
+  const [savedToast, setSavedToast] = useState<null | 'firecrawl' | 'github'>(null);
 
   const updateSettings = useCallback(
     async (patch: Partial<AppSettings>) => {
@@ -281,6 +285,218 @@ export function SettingsModal({
                 Ingen modeller funnet. Installer en med <code>ollama pull qwen2.5-coder:14b</code> el.l.
               </div>
             )}
+          </section>
+
+          <div className="settings-divider" />
+
+          {/* CONNECTORS — MCP-baserte verktøy som Sean kan bruke */}
+          <section className="settings-section">
+            <h3 className="settings-section-title">Connectors</h3>
+            <p className="settings-section-sub">
+              MCP-verktøy Sean kan bruke når du skriver til ham. Nøklene
+              lagres lokalt på denne maskinen og sendes med hver melding.
+              De lagres aldri på serveren.
+            </p>
+
+            {/* Firecrawl */}
+            <div className="settings-connector-card">
+              <div className="settings-connector-head">
+                <span className="settings-connector-name">🌐 Firecrawl</span>
+                <label className="settings-toggle">
+                  <input
+                    type="checkbox"
+                    checked={settings.connectors.firecrawl.enabled}
+                    onChange={(e) =>
+                      void updateSettings({
+                        connectors: {
+                          ...settings.connectors,
+                          firecrawl: {
+                            ...settings.connectors.firecrawl,
+                            enabled: e.target.checked,
+                          },
+                        },
+                      })
+                    }
+                  />
+                  <span>Aktiv</span>
+                </label>
+              </div>
+              <p className="settings-connector-desc">
+                Hent og søk på nettet. Trenger API-key fra firecrawl.dev
+                (gratis tier holder).
+              </p>
+              <div
+                className={`settings-key-row ${
+                  !settings.connectors.firecrawl.enabled
+                    ? 'settings-key-row-disabled'
+                    : ''
+                }`}
+              >
+                <input
+                  type={showFirecrawlKey ? 'text' : 'password'}
+                  className="settings-field-input"
+                  placeholder="fc-…"
+                  value={settings.connectors.firecrawl.apiKey}
+                  disabled={!settings.connectors.firecrawl.enabled}
+                  spellCheck={false}
+                  autoComplete="off"
+                  onChange={(e) =>
+                    void updateSettings({
+                      connectors: {
+                        ...settings.connectors,
+                        firecrawl: {
+                          ...settings.connectors.firecrawl,
+                          apiKey: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+                <button
+                  type="button"
+                  className="settings-key-toggle"
+                  onClick={() => setShowFirecrawlKey((v) => !v)}
+                  disabled={!settings.connectors.firecrawl.enabled}
+                  aria-label={showFirecrawlKey ? 'Skjul nøkkel' : 'Vis nøkkel'}
+                >
+                  {showFirecrawlKey ? 'Skjul' : 'Vis'}
+                </button>
+                <button
+                  type="button"
+                  className="qt-btn-secondary"
+                  disabled={
+                    !settings.connectors.firecrawl.enabled ||
+                    !settings.connectors.firecrawl.apiKey.trim()
+                  }
+                  onClick={() => {
+                    setSavedToast('firecrawl');
+                    setTimeout(
+                      () =>
+                        setSavedToast((t) => (t === 'firecrawl' ? null : t)),
+                      1800,
+                    );
+                  }}
+                >
+                  Test
+                </button>
+              </div>
+              {savedToast === 'firecrawl' && (
+                <span className="settings-toast">
+                  ✓ Lagret. Faktisk test skjer når Sean prøver å bruke
+                  connectoren.
+                </span>
+              )}
+              <button
+                type="button"
+                className="settings-help-link"
+                onClick={() =>
+                  void shellApi.openExternal('https://www.firecrawl.dev/app/api-keys')
+                }
+              >
+                ℹ Hjelp — hvor får jeg API-key?
+              </button>
+            </div>
+
+            {/* GitHub */}
+            <div className="settings-connector-card">
+              <div className="settings-connector-head">
+                <span className="settings-connector-name">🐙 GitHub</span>
+                <label className="settings-toggle">
+                  <input
+                    type="checkbox"
+                    checked={settings.connectors.github.enabled}
+                    onChange={(e) =>
+                      void updateSettings({
+                        connectors: {
+                          ...settings.connectors,
+                          github: {
+                            ...settings.connectors.github,
+                            enabled: e.target.checked,
+                          },
+                        },
+                      })
+                    }
+                  />
+                  <span>Aktiv</span>
+                </label>
+              </div>
+              <p className="settings-connector-desc">
+                Les issues, PRs, kode. Trenger Personal Access Token med
+                repo-scope.
+              </p>
+              <div
+                className={`settings-key-row ${
+                  !settings.connectors.github.enabled
+                    ? 'settings-key-row-disabled'
+                    : ''
+                }`}
+              >
+                <input
+                  type={showGithubKey ? 'text' : 'password'}
+                  className="settings-field-input"
+                  placeholder="ghp_…"
+                  value={settings.connectors.github.token}
+                  disabled={!settings.connectors.github.enabled}
+                  spellCheck={false}
+                  autoComplete="off"
+                  onChange={(e) =>
+                    void updateSettings({
+                      connectors: {
+                        ...settings.connectors,
+                        github: {
+                          ...settings.connectors.github,
+                          token: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+                <button
+                  type="button"
+                  className="settings-key-toggle"
+                  onClick={() => setShowGithubKey((v) => !v)}
+                  disabled={!settings.connectors.github.enabled}
+                  aria-label={showGithubKey ? 'Skjul token' : 'Vis token'}
+                >
+                  {showGithubKey ? 'Skjul' : 'Vis'}
+                </button>
+                <button
+                  type="button"
+                  className="qt-btn-secondary"
+                  disabled={
+                    !settings.connectors.github.enabled ||
+                    !settings.connectors.github.token.trim()
+                  }
+                  onClick={() => {
+                    setSavedToast('github');
+                    setTimeout(
+                      () =>
+                        setSavedToast((t) => (t === 'github' ? null : t)),
+                      1800,
+                    );
+                  }}
+                >
+                  Test
+                </button>
+              </div>
+              {savedToast === 'github' && (
+                <span className="settings-toast">
+                  ✓ Lagret. Faktisk test skjer når Sean prøver å bruke
+                  connectoren.
+                </span>
+              )}
+              <button
+                type="button"
+                className="settings-help-link"
+                onClick={() =>
+                  void shellApi.openExternal(
+                    'https://github.com/settings/tokens/new?scopes=repo&description=Nordrise%20Control',
+                  )
+                }
+              >
+                ℹ Hjelp — opprett en PAT
+              </button>
+            </div>
           </section>
 
           <div className="settings-divider" />

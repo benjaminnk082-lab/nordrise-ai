@@ -9,9 +9,21 @@ import { ControlSessionManager } from '../../controlSessionManager.js';
 const prisma = new PrismaClient();
 
 class FakeBridge extends EventEmitter {
-  public lastInvoke: { message: string; sessionId?: string | null; model?: string } | null = null;
+  public lastInvoke:
+    | {
+        message: string;
+        sessionId?: string | null;
+        model?: string;
+        env?: Record<string, string>;
+      }
+    | null = null;
   constructor(private readonly behaviour: 'success' | 'rate_limit') { super(); }
-  async invoke(opts: { message: string; sessionId?: string | null; model?: string }) {
+  async invoke(opts: {
+    message: string;
+    sessionId?: string | null;
+    model?: string;
+    env?: Record<string, string>;
+  }) {
     this.lastInvoke = opts;
     setTimeout(() => this.emit('thinking'), 1);
     setTimeout(() => this.emit('sessionId', 'claude-uuid-1'), 2);
@@ -104,5 +116,43 @@ describe('POST /control/message', () => {
       .set('Authorization', 'Bearer t1')
       .send({ controlSessionId: null, text: 'hei', model: 'gpt-4' });
     expect(res.status).toBe(400);
+  });
+  it('forwards connectorKeys to the bridge as env', async () => {
+    const { app, bridge } = buildApp('success');
+    await request(app)
+      .post('/control/message')
+      .set('Authorization', 'Bearer t1')
+      .send({
+        controlSessionId: null,
+        text: 'hei',
+        connectorKeys: {
+          FIRECRAWL_API_KEY: 'fc-secret-123',
+          GITHUB_PERSONAL_ACCESS_TOKEN: 'ghp_secret_456',
+        },
+      })
+      .buffer(true)
+      .parse((res, cb) => {
+        let data = '';
+        res.on('data', (c) => (data += c.toString()));
+        res.on('end', () => cb(null, data));
+      });
+    expect(bridge.lastInvoke?.env).toEqual({
+      FIRECRAWL_API_KEY: 'fc-secret-123',
+      GITHUB_PERSONAL_ACCESS_TOKEN: 'ghp_secret_456',
+    });
+  });
+  it('omits env when no connectorKeys provided', async () => {
+    const { app, bridge } = buildApp('success');
+    await request(app)
+      .post('/control/message')
+      .set('Authorization', 'Bearer t1')
+      .send({ controlSessionId: null, text: 'hei' })
+      .buffer(true)
+      .parse((res, cb) => {
+        let data = '';
+        res.on('data', (c) => (data += c.toString()));
+        res.on('end', () => cb(null, data));
+      });
+    expect(bridge.lastInvoke?.env).toBeUndefined();
   });
 });

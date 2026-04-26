@@ -39,6 +39,17 @@ export interface ClaudeBridgeOptions {
    * When omitted the CLI uses its default.
    */
   model?: string;
+  /**
+   * Optional environment variables to inject into the spawned `claude` process.
+   * Used by per-request connector keys (e.g. `FIRECRAWL_API_KEY`,
+   * `GITHUB_PERSONAL_ACCESS_TOKEN`) that the user supplies in Settings on the
+   * desktop client. Never persisted backend-side. `sanitizedEnv()` still
+   * strips `ANTHROPIC_API_KEY` first; the user-supplied keys are merged on
+   * top, so an attempt to set `ANTHROPIC_API_KEY` here would still be honored
+   * — callers must not include it. Connector key names are well-known and
+   * checked at the route layer.
+   */
+  env?: Record<string, string>;
   signal?: AbortSignal;
 }
 
@@ -119,7 +130,7 @@ export class ClaudeBridge extends EventEmitter {
 
     const started = Date.now();
     const child = spawn('claude', args, {
-      env: sanitizedEnv(),
+      env: { ...sanitizedEnv(), ...(opts.env ?? {}) },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 

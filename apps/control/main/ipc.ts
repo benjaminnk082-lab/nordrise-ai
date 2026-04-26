@@ -1,4 +1,4 @@
-import { ipcMain, net, app, Notification, BrowserWindow } from 'electron';
+import { ipcMain, net, app, shell, Notification, BrowserWindow } from 'electron';
 import { setToken, getToken, deleteToken } from './keychain.js';
 import { getPendingUpdateVersion, quitAndInstall } from './autoUpdate.js';
 import { getStore, type QuickTaskInput } from './store.js';
@@ -36,6 +36,12 @@ interface StreamStartPayload {
   attachments?: Array<{ fileId: string; workspacePath: string; filename: string }>;
   /** Optional Claude model override forwarded to the backend. */
   model?: string;
+  /**
+   * Optional MCP connector API keys. Forwarded as the `connectorKeys` field
+   * in the backend body — Sean spreads them into the claude-code spawn env.
+   * Stored only locally on the user's machine; never logged.
+   */
+  connectorKeys?: Record<string, string>;
 }
 
 interface OllamaStreamStartPayload {
@@ -174,6 +180,9 @@ export function registerIpc(): void {
           text: payload.text,
           attachments: payload.attachments,
           ...(payload.model ? { model: payload.model } : {}),
+          ...(payload.connectorKeys && Object.keys(payload.connectorKeys).length
+            ? { connectorKeys: payload.connectorKeys }
+            : {}),
         }),
         signal: ac.signal,
       });
@@ -344,6 +353,20 @@ export function registerIpc(): void {
       }
     },
   );
+  // Open an external URL in the user's default browser. Used by Settings
+  // help links. Strict allowlist on the protocol: http/https only, never
+  // `file:` / `javascript:` / custom schemes.
+  ipcMain.handle('shell:open-external', async (_e, url: string) => {
+    if (typeof url !== 'string') return false;
+    if (!/^https?:\/\//i.test(url)) return false;
+    try {
+      await shell.openExternal(url);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
   ipcMain.handle('ollama:stream-abort', (_e, streamId: string) => {
     const ac = activeStreams.get(streamId);
     if (ac) {

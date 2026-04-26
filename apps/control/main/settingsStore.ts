@@ -22,6 +22,15 @@ export type ClaudeModelId =
  */
 export type DefaultModelChoice = ClaudeModelId | 'auto';
 
+/**
+ * MCP connectors. Keys live LOCAL-ONLY here on the user's PC and travel
+ * ephemerally per request body to Sean. Never persisted backend-side.
+ */
+export interface ConnectorSettings {
+  firecrawl: { enabled: boolean; apiKey: string };
+  github: { enabled: boolean; token: string };
+}
+
 export interface AppSettings {
   defaultModel: DefaultModelChoice;
   ollamaEnabled: boolean;
@@ -31,6 +40,7 @@ export interface AppSettings {
   ollamaModel: string;
   /** controlSessionId -> model id (Claude id, "auto", or "ollama:<name>"). */
   perThreadModel: Record<string, string>;
+  connectors: ConnectorSettings;
   theme: 'dark';
 }
 
@@ -41,6 +51,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   preferOllamaForSimple: false,
   ollamaModel: '',
   perThreadModel: {},
+  connectors: {
+    firecrawl: { enabled: false, apiKey: '' },
+    github: { enabled: false, token: '' },
+  },
   theme: 'dark',
 };
 
@@ -71,6 +85,16 @@ function load(): AppSettings {
         ...DEFAULT_SETTINGS.perThreadModel,
         ...(parsed.perThreadModel ?? {}),
       },
+      connectors: {
+        firecrawl: {
+          ...DEFAULT_SETTINGS.connectors.firecrawl,
+          ...(parsed.connectors?.firecrawl ?? {}),
+        },
+        github: {
+          ...DEFAULT_SETTINGS.connectors.github,
+          ...(parsed.connectors?.github ?? {}),
+        },
+      },
     };
     return cached;
   } catch {
@@ -91,12 +115,23 @@ export function getSettings(): AppSettings {
 }
 
 export function setSettings(patch: Partial<AppSettings>): AppSettings {
+  const current = load();
   const next: AppSettings = {
-    ...load(),
+    ...current,
     ...patch,
     perThreadModel: {
-      ...load().perThreadModel,
+      ...current.perThreadModel,
       ...(patch.perThreadModel ?? {}),
+    },
+    connectors: {
+      firecrawl: {
+        ...current.connectors.firecrawl,
+        ...(patch.connectors?.firecrawl ?? {}),
+      },
+      github: {
+        ...current.connectors.github,
+        ...(patch.connectors?.github ?? {}),
+      },
     },
   };
   cached = next;
