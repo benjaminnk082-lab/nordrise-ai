@@ -2,10 +2,89 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #__next { height: 100%; }
-body {
-  background-color: #0b0b0e;
-  color: #e6e6ec;
-  font-family: Inter, system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
+@layer base {
+  html, body, #__next { height: 100%; }
+  body {
+    background-color: #07070a;
+    color: #e6e6ec;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+  }
+  ::selection { background: rgba(124, 92, 255, 0.35); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.16); }
+
+  input, textarea, button { font-family: inherit; }
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #e6e6ec;
+    -webkit-box-shadow: 0 0 0 1000px rgba(20, 20, 26, 0.9) inset;
+    transition: background-color 9999s ease-in-out 0s;
+  }
+}
+
+@layer utilities {
+  .bg-aurora {
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 0%, rgba(124, 92, 255, 0.18), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 100% 100%, rgba(80, 130, 255, 0.12), transparent 55%),
+      radial-gradient(ellipse 50% 40% at 50% 50%, rgba(180, 90, 220, 0.06), transparent 60%),
+      #07070a;
+  }
+  .glass {
+    background: rgba(20, 20, 26, 0.55);
+    backdrop-filter: saturate(160%) blur(28px);
+    -webkit-backdrop-filter: saturate(160%) blur(28px);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.04) inset,
+      0 30px 80px rgba(0, 0, 0, 0.55),
+      0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+  .glass-soft {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .input-apple {
+    @apply w-full rounded-xl px-4 py-3 text-[15px] text-text;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+  }
+  .input-apple::placeholder { color: rgba(230, 230, 236, 0.35); }
+  .input-apple:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+  .input-apple:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(124, 92, 255, 0.55);
+    box-shadow: 0 0 0 4px rgba(124, 92, 255, 0.15);
+  }
+  .btn-apple {
+    @apply rounded-xl px-5 py-3 text-[15px] font-medium tracking-tight;
+    background: linear-gradient(180deg, #8e72ff 0%, #6f4dff 100%);
+    color: #fff;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.18) inset,
+      0 0 0 1px rgba(124, 92, 255, 0.45),
+      0 8px 24px rgba(124, 92, 255, 0.35);
+    transition: transform 120ms ease, box-shadow 160ms ease, opacity 160ms ease;
+  }
+  .btn-apple:hover { transform: translateY(-1px); }
+  .btn-apple:active { transform: translateY(0); opacity: 0.9; }
+  .btn-apple:disabled { opacity: 0.5; transform: none; cursor: not-allowed; }
+  .btn-ghost {
+    @apply rounded-xl px-4 py-2.5 text-[13px] font-medium tracking-tight text-text-muted;
+    transition: color 120ms ease, background 120ms ease;
+  }
+  .btn-ghost:hover { color: #e6e6ec; background: rgba(255, 255, 255, 0.04); }
+  .hairline { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent); height: 1px; }
 }

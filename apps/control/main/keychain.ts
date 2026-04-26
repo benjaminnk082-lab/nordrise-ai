@@ -4,13 +4,22 @@ import { writeFile, readFile, unlink } from 'node:fs/promises';
 
 const SERVICE = 'nordrise-control';
 
-let keytarMod: typeof import('keytar') | null = null;
+type KeytarApi = typeof import('keytar');
+let keytarMod: KeytarApi | null = null;
 let keytarLoaded = false;
-async function tryKeytar() {
+async function tryKeytar(): Promise<KeytarApi | null> {
   if (keytarLoaded) return keytarMod;
   keytarLoaded = true;
   try {
-    keytarMod = await import('keytar');
+    // keytar is CommonJS — under NodeNext ESM the default export holds the
+    // real bindings. Some bundlers also expose them at the namespace root.
+    const raw = (await import('keytar')) as unknown as Record<string, unknown> & { default?: KeytarApi };
+    const candidate = (raw.default ?? raw) as KeytarApi;
+    if (typeof candidate.setPassword === 'function') {
+      keytarMod = candidate;
+    } else {
+      keytarMod = null;
+    }
   } catch {
     keytarMod = null;
   }
