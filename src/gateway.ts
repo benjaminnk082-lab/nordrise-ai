@@ -1,14 +1,23 @@
 /**
  * gateway.ts — Express entrypoint.
  *
- * Single Telegram webhook endpoint. Healthcheck. Graceful shutdown.
+ * Telegram webhook + /control routes. Healthcheck. Graceful shutdown.
  */
 
-import express, { type Request, type Response, type NextFunction } from 'express';
-import { config } from './config.js';
+import express, { Router, type Request, type Response, type NextFunction } from 'express';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { config, controlTokens } from './config.js';
 import { logger } from './logger.js';
 import { handleUpdate, initTelegramBot } from './channels/telegram.js';
 import { prisma } from './db.js';
+import { ClaudeBridge } from './claudeBridge.js';
+import { controlSessionManager } from './controlSessionManager.js';
+import { makeControlMessageRouter } from './api/control/messageRoute.js';
+import { makeControlSessionsRouter } from './api/control/sessionsRoute.js';
+import { makeControlHistoryRouter } from './api/control/historyRoute.js';
+import { makeControlUploadRouter } from './api/control/uploadRoute.js';
+import { startInboxCleanupInterval } from './api/control/inboxCleanup.js';
 
 const app = express();
 
@@ -56,6 +65,35 @@ app.post('/telegram', async (req: Request, res: Response) => {
   }
 });
 
+// /control/* — desktop control plane.
+// Each sub-router carries its own auth middleware via makeRequireControlToken.
+// uploadRoute's local error handler (LIMIT_FILE_SIZE -> 413) is registered on
+// the upload sub-router itself, so it's scoped to upload errors only and won't
+// catch errors from the other routers.
+const inboxDir = join(config.WORKSPACE_DIR, 'inbox');
+mkdirSync(inboxDir, { recursive: true });
+
+const controlRouter = Router();
+controlRouter.use(
+  makeControlMessageRouter({
+    mgr: controlSessionManager,
+    makeBridge: () => new ClaudeBridge(),
+    allowedTokens: controlTokens,
+  }),
+);
+controlRouter.use(
+  makeControlSessionsRouter({ mgr: controlSessionManager, prisma, allowedTokens: controlTokens }),
+);
+controlRouter.use(makeControlHistoryRouter({ prisma, allowedTokens: controlTokens }));
+controlRouter.use(
+  makeControlUploadRouter({
+    inboxDir,
+    allowedTokens: controlTokens,
+    maxFileSizeBytes: 25 * 1024 * 1024,
+  }),
+);
+app.use('/control', controlRouter);
+
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   logger.error({ err }, 'express error');
   if (!res.headersSent) res.status(500).json({ error: 'internal_error' });
@@ -63,12 +101,14 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 async function main() {
   await initTelegramBot();
+  const cleanupTimer = startInboxCleanupInterval(inboxDir);
   const server = app.listen(config.PORT, () => {
     logger.info({ port: config.PORT, env: config.NODE_ENV }, 'gateway listening');
   });
 
   const shutdown = (signal: string) => {
     logger.info({ signal }, 'shutting down');
+    clearInterval(cleanupTimer);
     server.close(() => {
       void prisma.$disconnect().finally(() => process.exit(0));
     });
