@@ -1,4 +1,6 @@
-import { autoUpdater } from 'electron-updater';
+// electron-updater is CommonJS — import as default and destructure to satisfy NodeNext ESM.
+import pkg from 'electron-updater';
+const { autoUpdater } = pkg;
 import { dialog, app } from 'electron';
 
 export function initAutoUpdate(): void {
