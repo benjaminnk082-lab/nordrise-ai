@@ -33,6 +33,7 @@ export function makeControlHistoryRouter(deps: HistoryRouterDeps): Router {
       where,
       orderBy: { createdAt: 'desc' },
       take: limit,
+      include: { reaction: true },
     });
     const messages: ControlMessageRow[] = rows.map((m) => ({
       id: m.id,
@@ -41,6 +42,9 @@ export function makeControlHistoryRouter(deps: HistoryRouterDeps): Router {
       createdAt: m.createdAt.toISOString(),
       durationMs: m.durationMs,
       source: m.sessionId ? 'telegram' : 'desktop',
+      reaction: m.reaction
+        ? (m.reaction.value as 'up' | 'down')
+        : null,
     }));
     res.json({ messages });
   });

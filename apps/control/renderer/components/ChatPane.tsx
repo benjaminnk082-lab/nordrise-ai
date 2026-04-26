@@ -1,12 +1,13 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ControlSessionSummary } from '../../src/server-types';
+import type { ControlSessionSummary, ReactionValue } from '../../src/server-types';
 import type { ThreadState } from '../state/thread';
 import { Message } from './Message';
 import { Composer, type ComposerAttachment } from './Composer';
 import { DropZone } from './DropZone';
 import { uploadFile } from '../lib/api';
 import { type AppSettings, modelLabel } from '../lib/settings';
+import { ThreadSettingsModal } from './ThreadSettingsModal';
 
 export interface ReadyAttachment {
   fileId: string;
@@ -30,6 +31,18 @@ export interface ChatPaneProps {
    * (claude-* or `ollama:<name>`).
    */
   onChangeThreadModel: (sessionId: string, modelId: string) => void | Promise<void>;
+  /**
+   * Toggle a 👍/👎 reaction on an assistant message. Parent owns the
+   * optimistic update (so UI flips instantly) AND the persistence call.
+   * `next === null` clears the reaction.
+   */
+  onReact?: (messageId: string, next: ReactionValue | null) => void;
+  /**
+   * Called when the user changes the per-thread system prompt via the
+   * settings modal. The parent should refresh its session list so the
+   * "✨ Custom prompt"-chip stays in sync after navigation.
+   */
+  onSystemPromptChanged?: (sessionId: string, next: string | null) => void;
 }
 
 function genLocalId(): string {
@@ -47,11 +60,16 @@ export function ChatPane({
   settings,
   ollamaAvailable,
   onChangeThreadModel,
+  onReact,
+  onSystemPromptChanged,
 }: ChatPaneProps) {
   const [draftText, setDraftText] = useState('');
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [threadSettingsOpen, setThreadSettingsOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const hasCustomPrompt = !!knownSession?.systemPrompt;
 
   // Resolve which model is active for the current thread (per-thread override
   // wins over the global default).
@@ -75,22 +93,28 @@ export function ChatPane({
       ...state.serverMessages.map((m) => ({
         kind: m.role as 'user' | 'assistant' | 'system',
         id: m.id,
+        // Reaction is only persisted on server messages — drafts haven't
+        // earned an id yet so they can't carry one.
+        reaction: m.reaction ?? null,
         content: m.content,
         createdAt: m.createdAt,
         source: m.source,
         streaming: false,
         thinking: false,
         error: null as string | null,
+        isPersisted: true,
       })),
       ...state.drafts.map((d) => ({
         kind: d.kind,
         id: d.id,
+        reaction: null as ReactionValue | null,
         content: d.content,
         createdAt: d.createdAt,
         source: 'desktop' as const,
         streaming: d.kind === 'assistant' ? d.streaming : false,
         thinking: d.kind === 'assistant' ? d.thinking : false,
         error: d.kind === 'assistant' ? d.error ?? null : null,
+        isPersisted: false,
       })),
     ];
   }, [state.serverMessages, state.drafts]);
@@ -245,6 +269,46 @@ export function ChatPane({
                     GitHub
                   </span>
                 )}
+              {hasCustomPrompt && (
+                <span
+                  className="connector-chip thread-prompt-chip"
+                  title={
+                    knownSession?.systemPrompt
+                      ? `Tråd-spesifikk system-prompt:\n${knownSession.systemPrompt.slice(0, 240)}${knownSession.systemPrompt.length > 240 ? '…' : ''}`
+                      : 'Tråd-spesifikk system-prompt aktiv'
+                  }
+                >
+                  <span aria-hidden="true">✨</span>
+                  Custom prompt
+                </span>
+              )}
+              <button
+                type="button"
+                className="thread-settings-btn"
+                onClick={() => setThreadSettingsOpen(true)}
+                title="Tråd-innstillinger"
+                aria-label="Tråd-innstillinger"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                  />
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
             </div>
           )}
         </div>
@@ -279,6 +343,9 @@ export function ChatPane({
               streaming={m.streaming}
               thinking={m.thinking}
               error={m.error}
+              reaction={m.reaction}
+              {...(m.isPersisted ? { messageId: m.id } : {})}
+              {...(onReact ? { onReact } : {})}
             />
           ))}
         </div>
@@ -294,6 +361,21 @@ export function ChatPane({
           onFiles={handleFiles}
         />
       </div>
+      {sessionId && threadSettingsOpen && (
+        <ThreadSettingsModal
+          open={threadSettingsOpen}
+          onClose={() => setThreadSettingsOpen(false)}
+          sessionId={sessionId}
+          threadTitle={title}
+          currentPrompt={knownSession?.systemPrompt ?? null}
+          onSaved={(next) => {
+            // Tell AppShell so the session list can re-fetch and the chip
+            // reflects the new state immediately. We DON'T update local
+            // state — knownSession comes from the parent.
+            onSystemPromptChanged?.(sessionId, next);
+          }}
+        />
+      )}
     </DropZone>
   );
 }

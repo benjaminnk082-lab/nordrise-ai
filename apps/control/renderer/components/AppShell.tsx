@@ -1,7 +1,13 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ControlSessionSummary } from '../../src/server-types';
-import { listMessages, listSessions, newSession } from '../lib/api';
+import type { ControlSessionSummary, ReactionValue } from '../../src/server-types';
+import {
+  listMessages,
+  listSessions,
+  newSession,
+  setReaction,
+  clearReaction,
+} from '../lib/api';
 import { useThreadState } from '../state/thread';
 import { useStream } from '../hooks/useStream';
 import { ThreadList, type ActiveSelection } from './ThreadList';
@@ -127,6 +133,7 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
     onDone,
     onError,
     resetDrafts,
+    setReactionLocal,
   } = useThreadState();
 
   const activeAssistantId = useRef<string | null>(null);
@@ -261,6 +268,36 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
     onError('avbrutt');
   }, [stream, onError]);
 
+  const handleReact = useCallback(
+    (messageId: string, next: ReactionValue | null) => {
+      // Optimistic local update so the bubble flips instantly. The persist
+      // call is fire-and-forget — if it fails the user can re-click and
+      // we'll retry with the same upsert semantics.
+      setReactionLocal(messageId, next);
+      void (async () => {
+        try {
+          if (next === null) await clearReaction(messageId);
+          else await setReaction(messageId, next);
+        } catch (err) {
+          console.warn('reaction persist failed', err);
+        }
+      })();
+    },
+    [setReactionLocal],
+  );
+
+  const handleSystemPromptChanged = useCallback(
+    (sid: string, next: string | null) => {
+      // Apply the change locally so the chip updates without waiting for
+      // the round-trip, then refresh the canonical session list.
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sid ? { ...s, systemPrompt: next } : s)),
+      );
+      void refreshSessions();
+    },
+    [refreshSessions],
+  );
+
   // Ctrl+K opens the quick-task palette anywhere in the shell.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -359,6 +396,8 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
                 });
                 setSettings(next);
               }}
+              onReact={handleReact}
+              onSystemPromptChanged={handleSystemPromptChanged}
             />
           )}
 

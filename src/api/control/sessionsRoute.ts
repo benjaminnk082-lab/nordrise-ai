@@ -5,7 +5,16 @@ import { ControlSessionManager } from '../../controlSessionManager.js';
 import { makeRequireControlToken } from './auth.js';
 import type { ControlSessionSummary, ControlMessageRow } from './types.js';
 
-const RenameBody = z.object({ title: z.string().min(1).max(120) });
+const PatchSessionBody = z
+  .object({
+    title: z.string().min(1).max(120).optional(),
+    // `null` clears the per-thread prompt and falls back to the persona;
+    // an empty string is also treated as "clear".
+    systemPrompt: z.string().max(5000).nullable().optional(),
+  })
+  .refine((v) => v.title !== undefined || v.systemPrompt !== undefined, {
+    message: 'must include title and/or systemPrompt',
+  });
 const MessageBody = z.object({
   role: z.enum(['user', 'assistant', 'system']),
   content: z.string().min(1).max(40_000),
@@ -13,6 +22,7 @@ const MessageBody = z.object({
   // accept it so the renderer can send it without breakage.
   model: z.string().optional(),
 });
+const ReactionBody = z.object({ value: z.enum(['up', 'down']) });
 
 export interface SessionsRouterDeps {
   mgr: ControlSessionManager;
@@ -33,6 +43,7 @@ export function makeControlSessionsRouter(deps: SessionsRouterDeps): Router {
       createdAt: row.createdAt.toISOString(),
       lastActiveAt: row.lastActiveAt.toISOString(),
       archivedAt: row.archivedAt?.toISOString() ?? null,
+      systemPrompt: row.systemPrompt ?? null,
     }));
     res.json({ sessions });
   });
@@ -47,16 +58,35 @@ export function makeControlSessionsRouter(deps: SessionsRouterDeps): Router {
       createdAt: row!.createdAt.toISOString(),
       lastActiveAt: row!.lastActiveAt.toISOString(),
       archivedAt: null,
+      systemPrompt: row!.systemPrompt ?? null,
     });
   });
 
   r.patch('/sessions/:id', auth, async (req, res) => {
-    const parsed = RenameBody.safeParse(req.body);
+    const parsed = PatchSessionBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'invalid_body' });
       return;
     }
-    await deps.mgr.rename(req.params.id!, parsed.data.title);
+    const data: { title?: string; systemPrompt?: string | null } = {};
+    if (parsed.data.title !== undefined) data.title = parsed.data.title;
+    if (parsed.data.systemPrompt !== undefined) {
+      // Treat empty / whitespace-only as a clear, so the renderer's "Slett"
+      // button can simply send "" without us having to special-case null
+      // there too.
+      const v = parsed.data.systemPrompt;
+      data.systemPrompt =
+        v === null || v.trim().length === 0 ? null : v;
+    }
+    try {
+      await deps.prisma.controlSession.update({
+        where: { id: req.params.id! },
+        data,
+      });
+    } catch {
+      res.status(404).json({ error: 'session_not_found' });
+      return;
+    }
     res.json({ ok: true });
   });
 
@@ -101,6 +131,7 @@ export function makeControlSessionsRouter(deps: SessionsRouterDeps): Router {
         ...(since ? { createdAt: { gt: since } } : {}),
       },
       orderBy: { createdAt: 'asc' },
+      include: { reaction: true },
     });
     const out: ControlMessageRow[] = messages.map((m) => ({
       id: m.id,
@@ -109,8 +140,52 @@ export function makeControlSessionsRouter(deps: SessionsRouterDeps): Router {
       createdAt: m.createdAt.toISOString(),
       durationMs: m.durationMs,
       source: 'desktop',
+      reaction: m.reaction
+        ? (m.reaction.value as 'up' | 'down')
+        : null,
     }));
     res.json({ messages: out });
+  });
+
+  // Reactions on a message — one reaction per message; POST is upsert,
+  // DELETE is idempotent. The renderer uses these to provide 👍/👎 feedback
+  // on Sean's responses; messageRoute reads the recent reactions in this
+  // session and passes them as feedback context to the next claude-code
+  // invocation (see composeExtraSystemPrompt).
+  r.post('/messages/:messageId/reaction', auth, async (req, res) => {
+    const parsed = ReactionBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'invalid_body' });
+      return;
+    }
+    const messageId = req.params.messageId!;
+    // Validate the message exists so we don't create reactions for ghost
+    // messages (Cascade-on-delete still cleans up if it goes away later).
+    const exists = await deps.prisma.message.findUnique({
+      where: { id: messageId },
+      select: { id: true },
+    });
+    if (!exists) {
+      res.status(404).json({ error: 'message_not_found' });
+      return;
+    }
+    await deps.prisma.reaction.upsert({
+      where: { messageId },
+      create: { messageId, value: parsed.data.value },
+      update: { value: parsed.data.value },
+    });
+    res.json({ ok: true });
+  });
+
+  r.delete('/messages/:messageId/reaction', auth, async (req, res) => {
+    try {
+      await deps.prisma.reaction.delete({
+        where: { messageId: req.params.messageId! },
+      });
+    } catch {
+      // Idempotent — already gone is success.
+    }
+    res.json({ ok: true });
   });
 
   return r;

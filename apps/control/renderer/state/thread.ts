@@ -58,7 +58,8 @@ type Action =
   | { type: 'done' }
   | { type: 'error'; message: string }
   | { type: 'reset-drafts' }
-  | { type: 'clear-error' };
+  | { type: 'clear-error' }
+  | { type: 'set-reaction'; messageId: string; value: 'up' | 'down' | null };
 
 function threadReducer(state: ThreadState, action: Action): ThreadState {
   switch (action.type) {
@@ -152,6 +153,14 @@ function threadReducer(state: ThreadState, action: Action): ThreadState {
     case 'clear-error':
       return { ...state, errorMessage: null };
 
+    case 'set-reaction':
+      return {
+        ...state,
+        serverMessages: state.serverMessages.map((m) =>
+          m.id === action.messageId ? { ...m, reaction: action.value } : m,
+        ),
+      };
+
     default:
       return state;
   }
@@ -187,6 +196,11 @@ export function useThreadState() {
   );
   const resetDrafts = useCallback(() => dispatch({ type: 'reset-drafts' }), []);
   const clearError = useCallback(() => dispatch({ type: 'clear-error' }), []);
+  const setReactionLocal = useCallback(
+    (messageId: string, value: 'up' | 'down' | null) =>
+      dispatch({ type: 'set-reaction', messageId, value }),
+    [],
+  );
 
   return {
     state,
@@ -199,5 +213,6 @@ export function useThreadState() {
     onError,
     resetDrafts,
     clearError,
+    setReactionLocal,
   };
 }

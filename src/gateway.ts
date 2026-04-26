@@ -106,6 +106,7 @@ controlRouter.use(
     mgr: controlSessionManager,
     makeBridge: () => new ClaudeBridge(),
     allowedTokens: controlTokens,
+    prisma,
   }),
 );
 controlRouter.use(

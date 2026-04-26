@@ -108,3 +108,43 @@ describe('ClaudeBridge.invoke env passthrough', () => {
     expect(spawnOpts.env.GITHUB_PERSONAL_ACCESS_TOKEN).toBeUndefined();
   });
 });
+
+describe('ClaudeBridge.invoke extraSystemPrompt', () => {
+  const successEvents = [
+    JSON.stringify({ type: 'system', subtype: 'init', session_id: 'sid-x' }),
+    JSON.stringify({
+      type: 'result',
+      subtype: 'success',
+      result: 'ok',
+      session_id: 'sid-x',
+      is_error: false,
+      total_cost_usd: 0,
+      duration_ms: 1,
+    }),
+  ];
+
+  it('appends extraSystemPrompt with persona when persona is empty', async () => {
+    spawnSpy.mockImplementation(() => makeFakeChild(successEvents));
+
+    // Empty persona path → cachedPrompt stays empty.
+    const bridge = new ClaudeBridge('/no/such/prompt.md');
+    await bridge.invoke({
+      message: 'hei',
+      extraSystemPrompt: 'svar alltid på engelsk',
+    });
+
+    const args = spawnSpy.mock.calls[0]![1] as string[];
+    const idx = args.indexOf('--append-system-prompt');
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx + 1]).toBe('svar alltid på engelsk');
+  });
+
+  it('passes persona alone when extraSystemPrompt is undefined / empty', async () => {
+    spawnSpy.mockImplementation(() => makeFakeChild(successEvents));
+    const bridge = new ClaudeBridge('/no/such/prompt.md');
+    await bridge.invoke({ message: 'hei', extraSystemPrompt: '   ' });
+    const args = spawnSpy.mock.calls[0]![1] as string[];
+    // No persona file → no --append-system-prompt at all.
+    expect(args.indexOf('--append-system-prompt')).toBe(-1);
+  });
+});

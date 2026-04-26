@@ -143,6 +143,45 @@ export async function listRecentRuns(): Promise<RoutineRunRecent[]> {
   return r.runs;
 }
 
+// ---------- Reactions ----------
+
+/**
+ * Set or update a reaction on an assistant message. Server upserts so the
+ * same message ends up with at most one reaction. Renderer should optimistic
+ * update the local state before awaiting this — the call is best-effort.
+ */
+export async function setReaction(
+  messageId: string,
+  value: 'up' | 'down',
+): Promise<void> {
+  await ipcFetch<{ ok: boolean }>(`/control/messages/${messageId}/reaction`, {
+    method: 'POST',
+    body: { value },
+  });
+}
+
+export async function clearReaction(messageId: string): Promise<void> {
+  await ipcFetch<{ ok: boolean }>(`/control/messages/${messageId}/reaction`, {
+    method: 'DELETE',
+  });
+}
+
+// ---------- Per-thread system prompt ----------
+
+/**
+ * PATCH a thread's metadata. Pass `systemPrompt: null` (or "") to clear the
+ * override and fall back to Sean's persona alone.
+ */
+export async function updateSession(
+  sessionId: string,
+  patch: { title?: string; systemPrompt?: string | null },
+): Promise<void> {
+  await ipcFetch<{ ok: boolean }>(`/control/sessions/${sessionId}`, {
+    method: 'PATCH',
+    body: patch,
+  });
+}
+
 // ---------- Suggestions ----------
 
 export async function listSuggestions(status?: string): Promise<SuggestionSummary[]> {

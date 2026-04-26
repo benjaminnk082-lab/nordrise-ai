@@ -2824,3 +2824,115 @@ input:-webkit-autofill:focus {
     inset 0 1px 0 rgba(255, 255, 255, 0.30),
     0 4px 10px rgba(124, 92, 255, 0.30);
 }
+
+/* ---------- v0.2.4: reactions on assistant bubbles ---------- */
+.message-reactions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  margin-left: 4px;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.bubble-row-assistant:hover .message-reactions {
+  opacity: 0.7;
+}
+/* Keep visible whenever a reaction is set so the user always sees their
+   feedback after navigating away/back. `:has()` is supported in Electron
+   33's Chromium. */
+.message-reactions:has(.reaction-active) {
+  opacity: 1;
+}
+.reaction-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(244, 244, 247, 0.55);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.reaction-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.reaction-active.reaction-up {
+  background: rgba(63, 197, 127, 0.15);
+  border-color: rgba(63, 197, 127, 0.40);
+  color: #3fc57f;
+}
+.reaction-active.reaction-down {
+  background: rgba(255, 91, 91, 0.15);
+  border-color: rgba(255, 91, 91, 0.40);
+  color: #ff5b5b;
+}
+
+/* ---------- v0.2.4: composer markdown preview ---------- */
+.composer-preview {
+  flex: 1;
+  min-height: 80px;
+  max-height: 240px;
+  padding: 12px 14px;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: rgba(244, 244, 247, 0.92);
+}
+.composer-toggle-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 22px 0;
+}
+.composer-link-btn {
+  padding: 4px 0;
+  font-size: 11px;
+  background: transparent;
+  border: 0;
+  color: rgba(244, 244, 247, 0.5);
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+.composer-link-btn:hover {
+  color: #c4b0ff;
+}
+
+/* ---------- v0.2.4: thread settings (gear) + custom-prompt chip ---------- */
+.thread-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(244, 244, 247, 0.55);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.thread-settings-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.thread-prompt-chip {
+  background: rgba(167, 139, 255, 0.14);
+  border-color: rgba(167, 139, 255, 0.36);
+  color: #d6c8ff;
+}
+.thread-settings-textarea {
+  width: 100%;
+  resize: vertical;
+}

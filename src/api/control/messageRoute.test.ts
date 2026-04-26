@@ -15,6 +15,7 @@ class FakeBridge extends EventEmitter {
         sessionId?: string | null;
         model?: string;
         env?: Record<string, string>;
+        extraSystemPrompt?: string;
       }
     | null = null;
   constructor(private readonly behaviour: 'success' | 'rate_limit') { super(); }
@@ -23,6 +24,7 @@ class FakeBridge extends EventEmitter {
     sessionId?: string | null;
     model?: string;
     env?: Record<string, string>;
+    extraSystemPrompt?: string;
   }) {
     this.lastInvoke = opts;
     setTimeout(() => this.emit('thinking'), 1);
@@ -37,6 +39,7 @@ class FakeBridge extends EventEmitter {
 }
 
 beforeEach(async () => {
+  await prisma.reaction.deleteMany({});
   await prisma.message.deleteMany({});
   await prisma.controlSession.deleteMany({});
 });
@@ -47,7 +50,15 @@ function buildApp(behaviour: 'success' | 'rate_limit') {
   app.use(express.json());
   const mgr = new ControlSessionManager(prisma);
   const bridge = new FakeBridge(behaviour);
-  app.use('/control', makeControlMessageRouter({ mgr, makeBridge: () => bridge as any, allowedTokens: ['t1'] }));
+  app.use(
+    '/control',
+    makeControlMessageRouter({
+      mgr,
+      makeBridge: () => bridge as any,
+      allowedTokens: ['t1'],
+      prisma,
+    }),
+  );
   return { app, bridge };
 }
 
@@ -154,5 +165,84 @@ describe('POST /control/message', () => {
         res.on('end', () => cb(null, data));
       });
     expect(bridge.lastInvoke?.env).toBeUndefined();
+  });
+
+  it('forwards per-thread systemPrompt as extraSystemPrompt', async () => {
+    const session = await prisma.controlSession.create({
+      data: { title: 'with prompt', systemPrompt: 'svar alltid på dansk' },
+    });
+    const { app, bridge } = buildApp('success');
+    await request(app)
+      .post('/control/message')
+      .set('Authorization', 'Bearer t1')
+      .send({ controlSessionId: session.id, text: 'hei' })
+      .buffer(true)
+      .parse((res, cb) => {
+        let data = '';
+        res.on('data', (c) => (data += c.toString()));
+        res.on('end', () => cb(null, data));
+      });
+    expect(bridge.lastInvoke?.extraSystemPrompt).toBeDefined();
+    expect(bridge.lastInvoke?.extraSystemPrompt).toContain(
+      'svar alltid på dansk',
+    );
+  });
+
+  it('appends recent reactions context to extraSystemPrompt (assistant-only)', async () => {
+    const session = await prisma.controlSession.create({
+      data: { title: 'with reactions' },
+    });
+    const userMsg = await prisma.message.create({
+      data: { controlSessionId: session.id, role: 'user', content: 'hva er 2+2?' },
+    });
+    const assistantMsg = await prisma.message.create({
+      data: { controlSessionId: session.id, role: 'assistant', content: 'svaret er 4' },
+    });
+    // Reaction on assistant — should appear in feedback context.
+    await prisma.reaction.create({
+      data: { messageId: assistantMsg.id, value: 'up' },
+    });
+    // Reaction on user — schema allows it but our query filters by
+    // role=assistant. Verify nothing leaks through.
+    await prisma.reaction.create({
+      data: { messageId: userMsg.id, value: 'down' },
+    });
+
+    const { app, bridge } = buildApp('success');
+    await request(app)
+      .post('/control/message')
+      .set('Authorization', 'Bearer t1')
+      .send({ controlSessionId: session.id, text: 'follow-up' })
+      .buffer(true)
+      .parse((res, cb) => {
+        let data = '';
+        res.on('data', (c) => (data += c.toString()));
+        res.on('end', () => cb(null, data));
+      });
+
+    const extra = bridge.lastInvoke?.extraSystemPrompt ?? '';
+    expect(extra).toContain('Nylige reaksjoner');
+    expect(extra).toContain('svaret er 4');
+    expect(extra).toContain('👍');
+    // user content must NOT leak — assistant only.
+    expect(extra).not.toContain('hva er 2+2');
+  });
+
+  it('omits extraSystemPrompt when neither systemPrompt nor reactions exist', async () => {
+    const session = await prisma.controlSession.create({
+      data: { title: 'plain' },
+    });
+    const { app, bridge } = buildApp('success');
+    await request(app)
+      .post('/control/message')
+      .set('Authorization', 'Bearer t1')
+      .send({ controlSessionId: session.id, text: 'hei' })
+      .buffer(true)
+      .parse((res, cb) => {
+        let data = '';
+        res.on('data', (c) => (data += c.toString()));
+        res.on('end', () => cb(null, data));
+      });
+    expect(bridge.lastInvoke?.extraSystemPrompt).toBeUndefined();
   });
 });

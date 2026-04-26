@@ -8,6 +8,7 @@ import { ControlSessionManager } from '../../controlSessionManager.js';
 
 const prisma = new PrismaClient();
 beforeEach(async () => {
+  await prisma.reaction.deleteMany({});
   await prisma.message.deleteMany({});
   await prisma.controlSession.deleteMany({});
   await prisma.session.deleteMany({});
@@ -79,5 +80,141 @@ describe('control sessions + history', () => {
       .set('Authorization', 'Bearer t1');
     expect(res.status).toBe(200);
     expect(res.body.messages.every((m: any) => m.source === 'telegram')).toBe(true);
+  });
+
+  it('PATCH /sessions/:id sets and clears systemPrompt', async () => {
+    const created = await prisma.controlSession.create({ data: { title: 'P' } });
+
+    // Set
+    const setRes = await request(app())
+      .patch(`/control/sessions/${created.id}`)
+      .set('Authorization', 'Bearer t1')
+      .send({ systemPrompt: 'svar kort og direkte' });
+    expect(setRes.status).toBe(200);
+    let row = await prisma.controlSession.findUnique({ where: { id: created.id } });
+    expect(row?.systemPrompt).toBe('svar kort og direkte');
+
+    // Clear via null
+    const clearRes = await request(app())
+      .patch(`/control/sessions/${created.id}`)
+      .set('Authorization', 'Bearer t1')
+      .send({ systemPrompt: null });
+    expect(clearRes.status).toBe(200);
+    row = await prisma.controlSession.findUnique({ where: { id: created.id } });
+    expect(row?.systemPrompt).toBeNull();
+
+    // Empty string also clears
+    await prisma.controlSession.update({
+      where: { id: created.id },
+      data: { systemPrompt: 'noe' },
+    });
+    const clearEmpty = await request(app())
+      .patch(`/control/sessions/${created.id}`)
+      .set('Authorization', 'Bearer t1')
+      .send({ systemPrompt: '   ' });
+    expect(clearEmpty.status).toBe(200);
+    row = await prisma.controlSession.findUnique({ where: { id: created.id } });
+    expect(row?.systemPrompt).toBeNull();
+  });
+
+  it('PATCH /sessions/:id rejects empty body', async () => {
+    const created = await prisma.controlSession.create({ data: { title: 'P' } });
+    const res = await request(app())
+      .patch(`/control/sessions/${created.id}`)
+      .set('Authorization', 'Bearer t1')
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('PATCH /sessions/:id still supports rename', async () => {
+    const created = await prisma.controlSession.create({ data: { title: 'old' } });
+    const res = await request(app())
+      .patch(`/control/sessions/${created.id}`)
+      .set('Authorization', 'Bearer t1')
+      .send({ title: 'ny tittel' });
+    expect(res.status).toBe(200);
+    const row = await prisma.controlSession.findUnique({ where: { id: created.id } });
+    expect(row?.title).toBe('ny tittel');
+  });
+
+  it('lists sessions with systemPrompt field included', async () => {
+    await prisma.controlSession.create({
+      data: { title: 'A', systemPrompt: 'be brief' },
+    });
+    const res = await request(app())
+      .get('/control/sessions')
+      .set('Authorization', 'Bearer t1');
+    expect(res.status).toBe(200);
+    expect(res.body.sessions[0].systemPrompt).toBe('be brief');
+  });
+
+  it('POST /messages/:id/reaction upserts and includes reaction in GET', async () => {
+    const session = await prisma.controlSession.create({ data: { title: 'R' } });
+    const msg = await prisma.message.create({
+      data: { controlSessionId: session.id, role: 'assistant', content: 'svar' },
+    });
+
+    // First POST creates
+    let res = await request(app())
+      .post(`/control/messages/${msg.id}/reaction`)
+      .set('Authorization', 'Bearer t1')
+      .send({ value: 'up' });
+    expect(res.status).toBe(200);
+
+    // Second POST updates value (upsert)
+    res = await request(app())
+      .post(`/control/messages/${msg.id}/reaction`)
+      .set('Authorization', 'Bearer t1')
+      .send({ value: 'down' });
+    expect(res.status).toBe(200);
+
+    const row = await prisma.reaction.findUnique({ where: { messageId: msg.id } });
+    expect(row?.value).toBe('down');
+
+    // GET messages includes reaction value
+    const list = await request(app())
+      .get(`/control/sessions/${session.id}/messages`)
+      .set('Authorization', 'Bearer t1');
+    expect(list.body.messages[0].reaction).toBe('down');
+  });
+
+  it('DELETE /messages/:id/reaction is idempotent', async () => {
+    const session = await prisma.controlSession.create({ data: { title: 'R' } });
+    const msg = await prisma.message.create({
+      data: { controlSessionId: session.id, role: 'assistant', content: 'svar' },
+    });
+    await prisma.reaction.create({ data: { messageId: msg.id, value: 'up' } });
+
+    const res1 = await request(app())
+      .delete(`/control/messages/${msg.id}/reaction`)
+      .set('Authorization', 'Bearer t1');
+    expect(res1.status).toBe(200);
+    expect(await prisma.reaction.findUnique({ where: { messageId: msg.id } })).toBeNull();
+
+    // second call still ok
+    const res2 = await request(app())
+      .delete(`/control/messages/${msg.id}/reaction`)
+      .set('Authorization', 'Bearer t1');
+    expect(res2.status).toBe(200);
+  });
+
+  it('POST reaction with invalid value returns 400', async () => {
+    const session = await prisma.controlSession.create({ data: { title: 'R' } });
+    const msg = await prisma.message.create({
+      data: { controlSessionId: session.id, role: 'assistant', content: 'x' },
+    });
+    const res = await request(app())
+      .post(`/control/messages/${msg.id}/reaction`)
+      .set('Authorization', 'Bearer t1')
+      .send({ value: 'meh' });
+    expect(res.status).toBe(400);
+  });
+
+  it('POST reaction on non-existent message returns 404', async () => {
+    const res = await request(app())
+      .post('/control/messages/missing/reaction')
+      .set('Authorization', 'Bearer t1')
+      .send({ value: 'up' });
+    expect(res.status).toBe(404);
   });
 });

@@ -1,6 +1,7 @@
 'use client';
 import ReactMarkdownPkg from 'react-markdown';
 import rehypeHighlightPkg from 'rehype-highlight';
+import type { ReactionValue } from '../../src/server-types';
 
 // react-markdown 9 ships ESM. Under Next's bundler we still need to
 // guard for double-default packaging; pick the function out of either form.
@@ -22,6 +23,22 @@ export interface MessageProps {
   streaming?: boolean;
   thinking?: boolean;
   error?: string | null;
+  /**
+   * Persisted reaction on this assistant message, if any. Ignored for
+   * non-assistant messages. Renderer-only; the parent handles persistence.
+   */
+  reaction?: ReactionValue | null;
+  /**
+   * Stable id for this message — required to fire onReact. Skipped for
+   * optimistic drafts that don't yet have a server id (parent passes
+   * undefined which disables the reaction buttons gracefully).
+   */
+  messageId?: string;
+  /**
+   * Toggle a reaction. Same value as currently set → clears it; otherwise
+   * upserts. Parent owns the optimistic update + fetch.
+   */
+  onReact?: (messageId: string, next: ReactionValue | null) => void;
 }
 
 function formatTime(iso?: string): string {
@@ -39,6 +56,9 @@ export function Message({
   streaming = false,
   thinking = false,
   error = null,
+  reaction = null,
+  messageId,
+  onReact,
 }: MessageProps) {
   const time = formatTime(createdAt);
   const senderLabel =
@@ -60,6 +80,23 @@ export function Message({
         <div className="bubble-user">{content}</div>
       </div>
     );
+  }
+
+  // Reactions are only meaningful on completed assistant replies. We hide
+  // them while streaming/thinking and on error rows so the bubble stays
+  // calm during generation.
+  const canReact =
+    role === 'assistant' &&
+    !!messageId &&
+    !!onReact &&
+    !streaming &&
+    !thinking &&
+    !error;
+
+  function handleReact(next: ReactionValue) {
+    if (!canReact || !messageId || !onReact) return;
+    // Click the active one → clear; otherwise upsert.
+    onReact(messageId, reaction === next ? null : next);
   }
 
   return (
@@ -87,6 +124,36 @@ export function Message({
           </div>
         )}
       </div>
+      {canReact && (
+        <div className="message-reactions">
+          <button
+            type="button"
+            className={
+              'reaction-btn' +
+              (reaction === 'up' ? ' reaction-active reaction-up' : '')
+            }
+            onClick={() => handleReact('up')}
+            aria-label="Bra svar"
+            aria-pressed={reaction === 'up'}
+            title="Bra svar"
+          >
+            <span aria-hidden="true">👍</span>
+          </button>
+          <button
+            type="button"
+            className={
+              'reaction-btn' +
+              (reaction === 'down' ? ' reaction-active reaction-down' : '')
+            }
+            onClick={() => handleReact('down')}
+            aria-label="Dårlig svar"
+            aria-pressed={reaction === 'down'}
+            title="Endre tilnærming"
+          >
+            <span aria-hidden="true">👎</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

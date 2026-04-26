@@ -1,5 +1,25 @@
 'use client';
-import { useEffect, useRef, type ClipboardEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
+import ReactMarkdownPkg from 'react-markdown';
+import rehypeHighlightPkg from 'rehype-highlight';
+
+// react-markdown 9 ships ESM. Mirror Message.tsx's double-default guard so
+// the preview renders identically to Sean's bubble.
+type MarkdownComponent = typeof import('react-markdown').default;
+const ReactMarkdown =
+  ((ReactMarkdownPkg as unknown as { default?: MarkdownComponent }).default ??
+    ReactMarkdownPkg) as MarkdownComponent;
+type RehypeHighlightPlugin = typeof import('rehype-highlight').default;
+const rehypeHighlight =
+  ((rehypeHighlightPkg as unknown as { default?: RehypeHighlightPlugin }).default ??
+    rehypeHighlightPkg) as RehypeHighlightPlugin;
+
+/**
+ * Threshold above which the "Forhåndsvis" link appears under the composer.
+ * Below this, the preview toggle is hidden — short messages don't benefit
+ * from a preview pane and the visual noise isn't worth it.
+ */
+const PREVIEW_TOGGLE_THRESHOLD = 200;
 
 export interface ComposerAttachment {
   localId: string;
@@ -42,6 +62,7 @@ export function Composer({
 }: ComposerProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewMode, setPreviewMode] = useState(false);
 
   // Auto-resize textarea up to ~6 rows
   useEffect(() => {
@@ -50,6 +71,13 @@ export function Composer({
     ta.style.height = '0px';
     const next = Math.min(ta.scrollHeight, 6 * 24 + 24);
     ta.style.height = `${next}px`;
+  }, [value, previewMode]);
+
+  // Send-time should drop preview so the composer is back to edit mode for
+  // the next draft. Same when streaming starts (to keep the abort button
+  // logic from rendering through a preview pane that has no input).
+  useEffect(() => {
+    if (value.length === 0) setPreviewMode(false);
   }, [value]);
 
   useEffect(() => {
@@ -107,6 +135,7 @@ export function Composer({
   const hasUploading = attachments.some((a) => a.status === 'uploading');
   const hasContent = value.trim().length > 0 || attachments.some((a) => a.status === 'ready');
   const canSubmit = !disabled && !hasUploading && hasContent;
+  const showPreviewToggle = !streaming && value.length > PREVIEW_TOGGLE_THRESHOLD;
 
   return (
     <div className="composer-wrap">
@@ -177,18 +206,32 @@ export function Composer({
             </button>
           </>
         )}
-        <textarea
-          ref={ref}
-          className="composer-input"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={handleKey}
-          onPaste={handlePaste}
-          placeholder={placeholder}
-          rows={1}
-          disabled={disabled}
-          spellCheck
-        />
+        {previewMode && showPreviewToggle ? (
+          // Markdown preview pane. Uses the same react-markdown +
+          // rehype-highlight stack as Sean's bubble for visual parity. We
+          // keep the textarea unmounted-but-preserved by storing draft in
+          // the parent so flipping back is instant and cursor-clean.
+          <div
+            className="composer-preview bubble-md"
+            role="region"
+            aria-label="Forhåndsvisning av melding"
+          >
+            <ReactMarkdown rehypePlugins={[rehypeHighlight]}>{value}</ReactMarkdown>
+          </div>
+        ) : (
+          <textarea
+            ref={ref}
+            className="composer-input"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={handleKey}
+            onPaste={handlePaste}
+            placeholder={placeholder}
+            rows={1}
+            disabled={disabled}
+            spellCheck
+          />
+        )}
         {streaming ? (
           <button
             type="button"
@@ -220,6 +263,18 @@ export function Composer({
           </button>
         )}
       </div>
+      {showPreviewToggle && (
+        <div className="composer-toggle-row">
+          <button
+            type="button"
+            className="composer-link-btn"
+            onClick={() => setPreviewMode((p) => !p)}
+            aria-pressed={previewMode}
+          >
+            {previewMode ? '← Rediger' : 'Forhåndsvis →'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

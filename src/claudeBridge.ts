@@ -50,6 +50,13 @@ export interface ClaudeBridgeOptions {
    * checked at the route layer.
    */
   env?: Record<string, string>;
+  /**
+   * Per-request system-prompt fragment that gets appended *after* the
+   * persona via `--append-system-prompt`. Used for per-thread prompts and
+   * context like recent reactions on this thread's assistant messages.
+   * Empty/whitespace-only strings are ignored.
+   */
+  extraSystemPrompt?: string;
   signal?: AbortSignal;
 }
 
@@ -126,7 +133,15 @@ export class ClaudeBridge extends EventEmitter {
     const args = ['-p', opts.message, '--output-format', 'stream-json', '--verbose'];
     if (opts.sessionId) args.push('--resume', opts.sessionId);
     if (opts.model) args.push('--model', opts.model);
-    if (persona.trim()) args.push('--append-system-prompt', persona);
+    // Compose the system-prompt argument: persona first, then any
+    // per-request fragment (per-thread override + recent-reactions
+    // feedback). Both pieces are trimmed; we drop empties so we never
+    // emit `--append-system-prompt ""`.
+    const combined = [persona, opts.extraSystemPrompt]
+      .map((s) => (typeof s === 'string' ? s.trim() : ''))
+      .filter((s) => s.length > 0)
+      .join('\n\n');
+    if (combined) args.push('--append-system-prompt', combined);
 
     const started = Date.now();
     const child = spawn('claude', args, {

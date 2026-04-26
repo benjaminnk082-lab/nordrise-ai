@@ -38,7 +38,15 @@ export interface ControlSessionSummary {
   createdAt: string;
   lastActiveAt: string;
   archivedAt: string | null;
+  /**
+   * Per-thread system-prompt override. Appended after the persona via
+   * `--append-system-prompt` for every message in this thread. NULL = use
+   * persona only.
+   */
+  systemPrompt: string | null;
 }
+
+export type ReactionValue = 'up' | 'down';
 
 export interface ControlMessageRow {
   id: string;
@@ -47,6 +55,11 @@ export interface ControlMessageRow {
   createdAt: string;
   durationMs: number | null;
   source: 'desktop' | 'telegram';
+  /**
+   * The user's 👍/👎 reaction on this message, if any. Only populated for
+   * assistant messages — clients should ignore reactions on user messages.
+   */
+  reaction: ReactionValue | null;
 }
 
 export type RoutineChannel = 'desktop' | 'telegram' | 'both';

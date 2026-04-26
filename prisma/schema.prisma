@@ -25,6 +25,9 @@ model ControlSession {
   createdAt       DateTime  @default(now())
   lastActiveAt    DateTime  @updatedAt
   archivedAt      DateTime?
+  /// Per-thread system-prompt override. Appended after the global persona
+  /// via --append-system-prompt in claudeBridge. NULL = use persona only.
+  systemPrompt    String?   @db.Text
   messages        Message[]
 
   @@index([lastActiveAt])
@@ -42,9 +45,19 @@ model Message {
   tokens           Int?
   durationMs       Int?
   createdAt        DateTime        @default(now())
+  reaction         Reaction?
 
   @@index([sessionId, createdAt])
   @@index([controlSessionId, createdAt])
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  messageId String   @unique
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  /// 'up' | 'down'
+  value     String
+  createdAt DateTime @default(now())
 }
 
 model MemoryNote {

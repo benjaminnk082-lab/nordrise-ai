@@ -25,6 +25,26 @@ export const vaultApi = {
   pickFolder: () =>
     window.nordrise.invoke<string | null>('vault:pick-folder'),
   listSeanNotes: () => window.nordrise.invoke<SeanNote[]>('vault:list-sean-notes'),
+  /**
+   * Sean's memory-stream — files written under `sean-notes/learnings/` and
+   * `sean-notes/journal/`. Reuses the existing list-sean-notes endpoint
+   * and filters by path prefix so we don't need a new IPC channel.
+   * Returns notes sorted newest-first.
+   */
+  listMemoryNotes: async (
+    folder: 'learnings' | 'journal',
+  ): Promise<SeanNote[]> => {
+    const all = await window.nordrise.invoke<SeanNote[]>('vault:list-sean-notes');
+    return all
+      .filter((n) => {
+        // The `path` field is workspace-relative inside sean-notes/, so the
+        // prefix we compare against is `learnings/` or `journal/` (no
+        // leading slash).
+        const norm = n.path.replace(/\\/g, '/');
+        return norm === folder || norm.startsWith(`${folder}/`);
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+  },
   adoptNote: (path: string, vaultRoot: string) =>
     window.nordrise.invoke<{ savedTo: string }>('vault:adopt-note', {
       path,

@@ -21,7 +21,7 @@ import {
   type UpdateStatus,
 } from '../lib/bridge';
 import { RoutinesSection } from './RoutinesSection';
-import { vaultApi, formatRelative, type VaultStatus } from '../lib/vault';
+import { vaultApi, formatRelative, type VaultStatus, type SeanNote } from '../lib/vault';
 
 export interface SettingsModalProps {
   open: boolean;
@@ -522,6 +522,11 @@ export function SettingsModal({
 
           <div className="settings-divider" />
 
+          {/* SEAN'S HUKOMMELSE */}
+          <MemoryStreamSection />
+
+          <div className="settings-divider" />
+
           {/* TILLATELSER */}
           <PermissionsSection
             permissions={settings.permissions}
@@ -957,6 +962,259 @@ function PermissionsSection({ permissions, onChange }: PermissionsSectionProps) 
           </div>
         </div>
       ))}
+    </section>
+  );
+}
+
+type MemoryTab = 'learnings' | 'journal';
+
+/**
+ * Surfaces files Sean has written under `sean-notes/learnings/` and
+ * `sean-notes/journal/`. Read-only by design — the source of truth is the
+ * server's filesystem; this is just a window into what Sean has remembered.
+ * Tap a row to expand its full content; "Avvis" removes it (delegated to
+ * the existing dismiss-note IPC).
+ */
+function MemoryStreamSection() {
+  const [tab, setTab] = useState<MemoryTab>('learnings');
+  const [notes, setNotes] = useState<SeanNote[]>([]);
+  const [filter, setFilter] = useState('');
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busyPath, setBusyPath] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const list = await vaultApi.listMemoryNotes(tab);
+      setNotes(list);
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setLoading(false);
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return notes;
+    return notes.filter(
+      (n) =>
+        n.path.toLowerCase().includes(q) ||
+        n.content.toLowerCase().includes(q),
+    );
+  }, [notes, filter]);
+
+  async function dismiss(path: string) {
+    setBusyPath(path);
+    try {
+      await vaultApi.dismissNote(path);
+      await refresh();
+      if (expanded === path) setExpanded(null);
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setBusyPath(null);
+    }
+  }
+
+  return (
+    <section className="settings-section">
+      <h3 className="settings-section-title">Sean&apos;s hukommelse</h3>
+      <p className="settings-section-sub">
+        Hva Sean har lagret i <code>sean-notes/learnings/</code> og{' '}
+        <code>sean-notes/journal/</code> over tid. Alfabetisk{' '}
+        søkbart — bruk det til å se hvilke mønstre Sean har plukket opp.
+      </p>
+
+      <div
+        className="perm-segment"
+        role="radiogroup"
+        aria-label="Hukommelse-fane"
+        style={{ marginBottom: 10 }}
+      >
+        {(['learnings', 'journal'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="radio"
+            aria-checked={tab === t}
+            className={
+              'perm-segment-btn' +
+              (tab === t ? ' perm-segment-btn-active' : '')
+            }
+            onClick={() => {
+              setTab(t);
+              setExpanded(null);
+            }}
+          >
+            {t === 'learnings' ? 'Lærdommer' : 'Journal'}
+          </button>
+        ))}
+      </div>
+
+      <input
+        type="text"
+        className="settings-field-input"
+        placeholder={`Søk i ${tab === 'learnings' ? 'lærdommer' : 'journal'}…`}
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        spellCheck={false}
+      />
+
+      {error && (
+        <div className="settings-status settings-status-fail" style={{ marginTop: 10 }}>
+          {error}
+        </div>
+      )}
+      {loading && notes.length === 0 && (
+        <div className="settings-status settings-status-idle" style={{ marginTop: 10 }}>
+          Laster…
+        </div>
+      )}
+      {!loading && notes.length === 0 && (
+        <div className="settings-status settings-status-idle" style={{ marginTop: 10 }}>
+          Ingenting i {tab === 'learnings' ? 'lærdommer' : 'journal'} ennå.
+        </div>
+      )}
+      {!loading && notes.length > 0 && filtered.length === 0 && (
+        <div className="settings-status settings-status-idle" style={{ marginTop: 10 }}>
+          Ingen treff på "{filter}".
+        </div>
+      )}
+
+      <div
+        className="memory-stream-list"
+        style={{
+          marginTop: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          maxHeight: 360,
+          overflow: 'auto',
+        }}
+      >
+        {filtered.map((note) => {
+          const isOpen = expanded === note.path;
+          const preview = note.content
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 100);
+          const fileName = note.path.split('/').pop() ?? note.path;
+          return (
+            <div
+              key={note.path}
+              className="memory-stream-row"
+              style={{
+                padding: 10,
+                borderRadius: 10,
+                background: 'rgba(0,0,0,0.32)',
+                border: '1px solid rgba(255,255,255,0.06)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setExpanded(isOpen ? null : note.path)}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  background: 'transparent',
+                  border: 0,
+                  padding: 0,
+                  cursor: 'pointer',
+                  color: 'inherit',
+                }}
+                aria-expanded={isOpen}
+              >
+                <header
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'baseline',
+                    marginBottom: 4,
+                    gap: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+                      fontSize: 12,
+                      color: 'rgba(244,244,247,0.85)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {fileName}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: 'rgba(244,244,247,0.5)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {formatRelative(note.mtime)}
+                  </span>
+                </header>
+                {!isOpen && (
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                      color: 'rgba(244,244,247,0.65)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {preview}
+                    {note.content.length > 100 && '…'}
+                  </p>
+                )}
+              </button>
+              {isOpen && (
+                <>
+                  <pre
+                    style={{
+                      margin: '8px 0 0',
+                      padding: 8,
+                      borderRadius: 6,
+                      background: 'rgba(0,0,0,0.45)',
+                      fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+                      fontSize: 11,
+                      lineHeight: 1.5,
+                      color: 'rgba(244,244,247,0.78)',
+                      maxHeight: 240,
+                      overflow: 'auto',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {note.content}
+                  </pre>
+                  <div className="settings-actions-row" style={{ marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className="qt-btn-secondary"
+                      disabled={busyPath === note.path}
+                      onClick={() => void dismiss(note.path)}
+                    >
+                      {busyPath === note.path ? 'Sletter…' : 'Slett'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }

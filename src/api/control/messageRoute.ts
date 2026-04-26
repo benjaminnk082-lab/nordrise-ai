@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
+import type { PrismaClient } from '@prisma/client';
 import { logger } from '../../logger.js';
 import type { ClaudeBridge } from '../../claudeBridge.js';
 import type { ControlSessionManager } from '../../controlSessionManager.js';
@@ -43,6 +44,72 @@ export interface MessageRouterDeps {
   mgr: ControlSessionManager;
   makeBridge: () => Pick<ClaudeBridge, 'invoke' | 'on'>;
   allowedTokens: readonly string[];
+  /**
+   * Prisma is required so we can compose the per-thread system prompt
+   * (ControlSession.systemPrompt) and the recent-reactions feedback
+   * fragment that gets appended to the persona. The legacy `mgr` interface
+   * doesn't expose either, so we read directly here.
+   */
+  prisma: PrismaClient;
+}
+
+/**
+ * Build the optional per-thread system-prompt fragment that gets appended
+ * after the persona via `--append-system-prompt`. Combines:
+ *   1. ControlSession.systemPrompt (user-set, per thread)
+ *   2. The last 10 reacted-to assistant messages, formatted as a feedback
+ *      block. ONLY assistant content is included — the user is the one
+ *      reacting, so their messages aren't being "rated".
+ * Returns `undefined` when neither piece exists.
+ */
+export async function composeExtraSystemPrompt(
+  prisma: PrismaClient,
+  controlSessionId: string,
+): Promise<string | undefined> {
+  const [sessionRow, recentReactions] = await Promise.all([
+    prisma.controlSession.findUnique({
+      where: { id: controlSessionId },
+      select: { systemPrompt: true },
+    }),
+    prisma.message.findMany({
+      where: {
+        controlSessionId,
+        role: 'assistant',
+        reaction: { isNot: null },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      include: { reaction: true },
+    }),
+  ]);
+
+  const parts: string[] = [];
+  if (sessionRow?.systemPrompt && sessionRow.systemPrompt.trim()) {
+    parts.push(sessionRow.systemPrompt.trim());
+  }
+
+  if (recentReactions.length > 0) {
+    // Reverse so oldest-first reads naturally as "Sean said X, you reacted Y".
+    const lines = [...recentReactions].reverse().map((m) => {
+      const sym = m.reaction!.value === 'up' ? '👍' : '👎';
+      // Trim assistant content to a one-line preview so the system prompt
+      // doesn't balloon. 120 chars is enough to recognise the reply.
+      const preview = m.content.replace(/\s+/g, ' ').trim().slice(0, 120);
+      return `- ${sym} på Sean's svar: "${preview}…"`;
+    });
+    parts.push(
+      [
+        '## Nylige reaksjoner i denne tråden',
+        ...lines,
+        '',
+        'Bruk disse som tilbakemelding: 👍 = fortsett denne stilen, ' +
+          '👎 = endre tilnærming.',
+      ].join('\n'),
+    );
+  }
+
+  if (parts.length === 0) return undefined;
+  return parts.join('\n\n');
 }
 
 export function makeControlMessageRouter(deps: MessageRouterDeps): Router {
@@ -109,11 +176,23 @@ async function handle(req: Request, res: Response, deps: MessageRouterDeps): Pro
       env.GITHUB_PERSONAL_ACCESS_TOKEN = body.connectorKeys.GITHUB_PERSONAL_ACCESS_TOKEN;
     }
 
+    // Compose the per-thread system-prompt extras (custom prompt + recent
+    // reactions). This runs before bridge.invoke so the new context flows
+    // to claude-code on the same call. Best-effort — if the lookup fails
+    // we still send the message without the extras instead of crashing.
+    let extraSystemPrompt: string | undefined;
+    try {
+      extraSystemPrompt = await composeExtraSystemPrompt(deps.prisma, session.id);
+    } catch (err) {
+      logger.warn({ err, controlSessionId: session.id }, 'extra system prompt compose failed');
+    }
+
     const result = await bridge.invoke({
       message: prompt,
       sessionId: session.claudeSessionId,
       ...(body.model ? { model: body.model } : {}),
       ...(Object.keys(env).length ? { env } : {}),
+      ...(extraSystemPrompt ? { extraSystemPrompt } : {}),
       signal: ac.signal,
     });
 
