@@ -91,3 +91,43 @@ export interface RoutineCreateInput {
 }
 
 export type RoutinePatchInput = Partial<RoutineCreateInput>;
+
+// ---------- Suggestions ----------
+
+export type SuggestionStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'done'
+  | 'failed'
+  | 'expired';
+
+export type SuggestionType =
+  | 'research'
+  | 'cleanup'
+  | 'check'
+  | 'remind'
+  | 'idea'
+  | 'note';
+
+export interface SuggestionSummary {
+  id: string;
+  type: SuggestionType;
+  title: string;
+  rationale: string;
+  prompt: string;
+  status: SuggestionStatus;
+  createdAt: string;
+  expiresAt: string;
+  decidedAt: string | null;
+  executedAt: string | null;
+  result: string | null;
+  errorMsg: string | null;
+  durationMs: number | null;
+}
+
+export interface SuggestionGenerateResult {
+  generated: number;
+  skipped: boolean;
+  reason?: string;
+}

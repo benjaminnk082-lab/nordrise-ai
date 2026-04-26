@@ -20,6 +20,12 @@ import { makeControlUploadRouter } from './api/control/uploadRoute.js';
 import { makeVaultRouter } from './api/control/vaultRoute.js';
 import { makeRoutinesRouter } from './api/control/routinesRoute.js';
 import { startRoutinesRunner } from './api/control/routinesRunner.js';
+import { makeSuggestionsRouter } from './api/control/suggestionsRoute.js';
+import {
+  startSuggestionsGenerator,
+  stopSuggestionsGenerator,
+  startExpirationSweep,
+} from './api/control/suggestionsGenerator.js';
 import { startInboxCleanupInterval } from './api/control/inboxCleanup.js';
 
 const app = express();
@@ -133,6 +139,8 @@ controlRouter.use(
     allowedTokens: controlTokens,
   }),
 );
+// Suggestion queue — Sean's autonomous proposals.
+controlRouter.use(makeSuggestionsRouter({ prisma, allowedTokens: controlTokens }));
 app.use('/control', controlRouter);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
@@ -149,6 +157,14 @@ async function main() {
   } catch (err) {
     logger.error({ err }, 'routines runner failed to start (continuing)');
   }
+  // Suggestion-generator: cron tick + periodic expiration sweep. Both are
+  // best-effort — never let them crash the gateway boot.
+  try {
+    await startSuggestionsGenerator({ prisma, config: {} });
+  } catch (err) {
+    logger.error({ err }, 'suggestions generator failed to start (continuing)');
+  }
+  const expirationSweep = startExpirationSweep(prisma);
   const cleanupTimer = startInboxCleanupInterval(inboxDir);
   const server = app.listen(config.PORT, () => {
     logger.info({ port: config.PORT, env: config.NODE_ENV }, 'gateway listening');
@@ -157,6 +173,8 @@ async function main() {
   const shutdown = (signal: string) => {
     logger.info({ signal }, 'shutting down');
     clearInterval(cleanupTimer);
+    clearInterval(expirationSweep);
+    stopSuggestionsGenerator();
     server.close(() => {
       void prisma.$disconnect().finally(() => process.exit(0));
     });

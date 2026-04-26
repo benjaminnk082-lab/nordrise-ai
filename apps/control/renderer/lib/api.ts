@@ -6,6 +6,8 @@ import type {
   RoutineRunRecent,
   RoutineCreateInput,
   RoutinePatchInput,
+  SuggestionSummary,
+  SuggestionGenerateResult,
 } from '../../src/server-types';
 
 interface IpcFetchInit {
@@ -139,6 +141,41 @@ export async function listRoutineRuns(id: string): Promise<RoutineRunRow[]> {
 export async function listRecentRuns(): Promise<RoutineRunRecent[]> {
   const r = await ipcFetch<{ runs: RoutineRunRecent[] }>('/control/routines/runs/recent');
   return r.runs;
+}
+
+// ---------- Suggestions ----------
+
+export async function listSuggestions(status?: string): Promise<SuggestionSummary[]> {
+  const q = status ? `?status=${encodeURIComponent(status)}` : '';
+  const r = await ipcFetch<{ suggestions: SuggestionSummary[] }>(
+    `/control/suggestions${q}`,
+  );
+  return r.suggestions;
+}
+
+export async function approveSuggestion(id: string): Promise<SuggestionSummary> {
+  return ipcFetch<SuggestionSummary>(`/control/suggestions/${id}/approve`, {
+    method: 'POST',
+    body: {},
+  });
+}
+
+export async function rejectSuggestion(id: string): Promise<SuggestionSummary> {
+  return ipcFetch<SuggestionSummary>(`/control/suggestions/${id}/reject`, {
+    method: 'POST',
+    body: {},
+  });
+}
+
+export async function deleteSuggestion(id: string): Promise<void> {
+  await ipcFetch<{ ok: boolean }>(`/control/suggestions/${id}`, { method: 'DELETE' });
+}
+
+export async function generateSuggestionsNow(): Promise<SuggestionGenerateResult> {
+  return ipcFetch<SuggestionGenerateResult>(`/control/suggestions/generate-now`, {
+    method: 'POST',
+    body: {},
+  });
 }
 
 export interface SseFrame {

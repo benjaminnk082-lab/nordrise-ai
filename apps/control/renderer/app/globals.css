@@ -2731,3 +2731,17 @@ input:-webkit-autofill:focus {
   text-decoration: underline;
   padding: 0;
 }
+
+/* Suggestion-card border accents — overrides the generic dark glass card.
+ * Pending: purple accent matches the Sean theme.
+ * Failed:  red accent so failures stand out in the history list.
+ * Done:    dimmed so the active queue dominates visually. */
+.suggestion-card.suggestion-pending {
+  border-left: 3px solid #7c5cff;
+}
+.suggestion-card.suggestion-failed {
+  border-left: 3px solid #ff5b5b;
+}
+.suggestion-card.suggestion-done {
+  opacity: 0.6;
+}

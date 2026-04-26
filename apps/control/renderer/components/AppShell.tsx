@@ -12,6 +12,7 @@ import { QuickTaskPalette } from './QuickTaskPalette';
 import { QuickTaskManager } from './QuickTaskManager';
 import { SettingsModal } from './SettingsModal';
 import { RoutinesPill } from './RoutinesPill';
+import { SuggestionsPill } from './SuggestionsPill';
 import { SeanNotesPanel } from './SeanNotesPanel';
 import { vaultApi } from '../lib/vault';
 import { quitAndInstall, getPendingUpdate } from '../lib/bridge';
@@ -387,6 +388,7 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
             Quick-tasks
           </button>
           <RoutinesPill />
+          <SuggestionsPill />
           {settings.vault.enabled && (
             <button
               type="button"

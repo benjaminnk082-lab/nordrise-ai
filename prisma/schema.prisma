@@ -83,3 +83,22 @@ model RoutineRun {
 
   @@index([routineId, startedAt])
 }
+
+model Suggestion {
+  id          String   @id @default(cuid())
+  type        String   // 'research' | 'cleanup' | 'check' | 'remind' | 'idea' | 'note'
+  title       String   @db.Text
+  rationale   String   @db.Text
+  prompt      String   @db.Text   // what Sean would do if approved
+  status      String   @default("pending")  // 'pending' | 'approved' | 'rejected' | 'done' | 'failed' | 'expired'
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  decidedAt   DateTime?
+  executedAt  DateTime?
+  result      String?  @db.Text
+  errorMsg    String?  @db.Text
+  durationMs  Int?
+
+  @@index([status, expiresAt])
+  @@index([createdAt])
+}
