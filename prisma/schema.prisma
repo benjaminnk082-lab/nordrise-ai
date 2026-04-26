@@ -18,17 +18,33 @@ model Session {
   @@index([lastActiveAt])
 }
 
+model ControlSession {
+  id              String    @id @default(cuid())
+  title           String?
+  claudeSessionId String?
+  createdAt       DateTime  @default(now())
+  lastActiveAt    DateTime  @updatedAt
+  archivedAt      DateTime?
+  messages        Message[]
+
+  @@index([lastActiveAt])
+  @@index([archivedAt])
+}
+
 model Message {
-  id         String   @id @default(cuid())
-  sessionId  String
-  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  role       String
-  content    String   @db.Text
-  tokens     Int?
-  durationMs Int?
-  createdAt  DateTime @default(now())
+  id               String          @id @default(cuid())
+  sessionId        String?
+  controlSessionId String?
+  session          Session?        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  controlSession   ControlSession? @relation(fields: [controlSessionId], references: [id], onDelete: Cascade)
+  role             String
+  content          String          @db.Text
+  tokens           Int?
+  durationMs       Int?
+  createdAt        DateTime        @default(now())
 
   @@index([sessionId, createdAt])
+  @@index([controlSessionId, createdAt])
 }
 
 model MemoryNote {
