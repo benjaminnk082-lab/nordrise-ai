@@ -53,3 +53,33 @@ model MemoryNote {
   content   String   @db.Text
   createdAt DateTime @default(now())
 }
+
+model Routine {
+  id          String   @id @default(cuid())
+  name        String
+  prompt      String   @db.Text
+  schedule    String   // cron string, e.g. "0 9 * * 1" = Mon 09:00
+  enabled     Boolean  @default(true)
+  channel     String   @default("desktop")  // 'desktop' | 'telegram' | 'both'
+  model       String?  // optional override; null = default
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastRunAt   DateTime?
+  runs        RoutineRun[]
+
+  @@index([enabled, schedule])
+}
+
+model RoutineRun {
+  id          String    @id @default(cuid())
+  routineId   String
+  routine     Routine   @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  status      String    // 'running' | 'success' | 'failed'
+  result      String?   @db.Text
+  errorMsg    String?   @db.Text
+  durationMs  Int?
+
+  @@index([routineId, startedAt])
+}

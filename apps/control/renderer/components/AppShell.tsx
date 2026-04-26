@@ -11,6 +11,7 @@ import { TelegramHistory } from './TelegramHistory';
 import { QuickTaskPalette } from './QuickTaskPalette';
 import { QuickTaskManager } from './QuickTaskManager';
 import { SettingsModal } from './SettingsModal';
+import { RoutinesPill } from './RoutinesPill';
 import { quitAndInstall, getPendingUpdate } from '../lib/bridge';
 import {
   settingsApi,
@@ -355,6 +356,7 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
           >
             Quick-tasks
           </button>
+          <RoutinesPill />
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}

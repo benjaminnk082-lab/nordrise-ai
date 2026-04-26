@@ -9,7 +9,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { config, controlTokens } from './config.js';
 import { logger } from './logger.js';
-import { handleUpdate, initTelegramBot } from './channels/telegram.js';
+import { handleUpdate, initTelegramBot, bot } from './channels/telegram.js';
 import { prisma } from './db.js';
 import { ClaudeBridge } from './claudeBridge.js';
 import { controlSessionManager } from './controlSessionManager.js';
@@ -17,6 +17,8 @@ import { makeControlMessageRouter } from './api/control/messageRoute.js';
 import { makeControlSessionsRouter } from './api/control/sessionsRoute.js';
 import { makeControlHistoryRouter } from './api/control/historyRoute.js';
 import { makeControlUploadRouter } from './api/control/uploadRoute.js';
+import { makeRoutinesRouter } from './api/control/routinesRoute.js';
+import { startRoutinesRunner } from './api/control/routinesRunner.js';
 import { startInboxCleanupInterval } from './api/control/inboxCleanup.js';
 
 const app = express();
@@ -106,6 +108,18 @@ controlRouter.use(
     maxFileSizeBytes: 25 * 1024 * 1024,
   }),
 );
+// Routines (recurring tasks) — first whitelisted Telegram id is treated as
+// "Benjamin" for runner notifications. If the env list is empty we still
+// allow the runner to boot; Telegram-channel notifications will fail-soft.
+const benjaminTelegramId = config.ALLOWED_TELEGRAM_USER_IDS[0] ?? 0n;
+controlRouter.use(
+  makeRoutinesRouter({
+    prisma,
+    bot,
+    benjaminTelegramId,
+    allowedTokens: controlTokens,
+  }),
+);
 app.use('/control', controlRouter);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
@@ -115,6 +129,13 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 async function main() {
   await initTelegramBot();
+  // Boot the routines runner. Failure is non-fatal — log and continue so
+  // a bad cron string in one row can never block the whole gateway start.
+  try {
+    await startRoutinesRunner({ prisma, bot, benjaminTelegramId });
+  } catch (err) {
+    logger.error({ err }, 'routines runner failed to start (continuing)');
+  }
   const cleanupTimer = startInboxCleanupInterval(inboxDir);
   const server = app.listen(config.PORT, () => {
     logger.info({ port: config.PORT, env: config.NODE_ENV }, 'gateway listening');

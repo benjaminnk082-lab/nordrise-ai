@@ -14,6 +14,7 @@ import {
   getPendingUpdate,
   clearStoredToken,
 } from '../lib/bridge';
+import { RoutinesSection } from './RoutinesSection';
 
 export interface SettingsModalProps {
   open: boolean;
@@ -498,6 +499,11 @@ export function SettingsModal({
               </button>
             </div>
           </section>
+
+          <div className="settings-divider" />
+
+          {/* RUTINER */}
+          <RoutinesSection />
 
           <div className="settings-divider" />
 

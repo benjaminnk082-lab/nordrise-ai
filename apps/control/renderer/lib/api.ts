@@ -1,7 +1,15 @@
-import type { ControlSessionSummary, ControlMessageRow } from '../../src/server-types';
+import type {
+  ControlSessionSummary,
+  ControlMessageRow,
+  RoutineSummary,
+  RoutineRunRow,
+  RoutineRunRecent,
+  RoutineCreateInput,
+  RoutinePatchInput,
+} from '../../src/server-types';
 
 interface IpcFetchInit {
-  method?: 'GET' | 'POST' | 'PATCH';
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
 }
 
@@ -86,6 +94,51 @@ export async function uploadFile(file: File): Promise<UploadResult> {
     throw new Error(`upload failed (${r.status}): ${detail}`);
   }
   return r.body as UploadResult;
+}
+
+// ---------- Routines ----------
+
+export async function listRoutines(): Promise<RoutineSummary[]> {
+  const r = await ipcFetch<{ routines: RoutineSummary[] }>('/control/routines');
+  return r.routines;
+}
+
+export async function createRoutine(input: RoutineCreateInput): Promise<RoutineSummary> {
+  return ipcFetch<RoutineSummary>('/control/routines', {
+    method: 'POST',
+    body: input,
+  });
+}
+
+export async function updateRoutine(
+  id: string,
+  patch: RoutinePatchInput,
+): Promise<RoutineSummary> {
+  return ipcFetch<RoutineSummary>(`/control/routines/${id}`, {
+    method: 'PATCH',
+    body: patch,
+  });
+}
+
+export async function deleteRoutine(id: string): Promise<void> {
+  await ipcFetch<{ ok: boolean }>(`/control/routines/${id}`, { method: 'DELETE' });
+}
+
+export async function runRoutineNow(id: string): Promise<void> {
+  await ipcFetch<{ ok: boolean }>(`/control/routines/${id}/run`, {
+    method: 'POST',
+    body: {},
+  });
+}
+
+export async function listRoutineRuns(id: string): Promise<RoutineRunRow[]> {
+  const r = await ipcFetch<{ runs: RoutineRunRow[] }>(`/control/routines/${id}/runs`);
+  return r.runs;
+}
+
+export async function listRecentRuns(): Promise<RoutineRunRecent[]> {
+  const r = await ipcFetch<{ runs: RoutineRunRecent[] }>('/control/routines/runs/recent');
+  return r.runs;
 }
 
 export interface SseFrame {

@@ -48,3 +48,46 @@ export interface ControlMessageRow {
   durationMs: number | null;
   source: 'desktop' | 'telegram';
 }
+
+export type RoutineChannel = 'desktop' | 'telegram' | 'both';
+export type RoutineRunStatus = 'running' | 'success' | 'failed';
+
+export interface RoutineSummary {
+  id: string;
+  name: string;
+  prompt: string;
+  schedule: string;
+  enabled: boolean;
+  channel: RoutineChannel;
+  model: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastRunAt: string | null;
+  runCount: number;
+}
+
+export interface RoutineRunRow {
+  id: string;
+  routineId: string;
+  startedAt: string;
+  finishedAt: string | null;
+  status: RoutineRunStatus;
+  result: string | null;
+  errorMsg: string | null;
+  durationMs: number | null;
+}
+
+export interface RoutineRunRecent extends RoutineRunRow {
+  routineName: string;
+}
+
+export interface RoutineCreateInput {
+  name: string;
+  prompt: string;
+  schedule: string;
+  enabled?: boolean;
+  channel?: RoutineChannel;
+  model?: ClaudeModelId;
+}
+
+export type RoutinePatchInput = Partial<RoutineCreateInput>;

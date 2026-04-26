@@ -25,7 +25,7 @@ const activeStreams = new Map<string, AbortController>();
 
 interface FetchPayload {
   path: string;
-  method?: 'GET' | 'POST' | 'PATCH';
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
 }
 
@@ -379,6 +379,32 @@ export function registerIpc(): void {
   ipcMain.handle('popup:close', () => {
     hidePopup();
   });
+  // Routines: surface a desktop Notification when the renderer detects a
+  // newly-finished successful run. Click focuses the main window.
+  ipcMain.handle(
+    'routines:notify',
+    (_e, payload: { name: string; preview: string }) => {
+      if (!Notification.isSupported()) return;
+      const n = new Notification({
+        title: `Routine: ${payload.name}`,
+        body: (payload.preview ?? '').slice(0, 240),
+        silent: false,
+      });
+      n.on('click', () => {
+        const all = BrowserWindow.getAllWindows().filter(
+          (w) => !w.webContents.getURL().includes('/popup/'),
+        );
+        const main = all[0];
+        if (main) {
+          if (main.isMinimized()) main.restore();
+          main.show();
+          main.focus();
+        }
+      });
+      n.show();
+    },
+  );
+
   ipcMain.handle(
     'popup:reply',
     (_e, payload: { user: string; assistant: string }) => {

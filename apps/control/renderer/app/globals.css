@@ -2494,3 +2494,237 @@ input:-webkit-autofill:focus {
   gap: 8px;
   flex-wrap: wrap;
 }
+
+/* ============================================================
+   Routines (Settings → Rutiner) + footer pill
+   ============================================================ */
+
+.routines-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.routines-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.routines-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.routines-row-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #f4f4f7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.routines-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: rgba(244, 244, 247, 0.55);
+}
+
+.routines-row-schedule {
+  color: rgba(196, 176, 255, 0.85);
+}
+
+.routines-row-channel {
+  color: rgba(244, 244, 247, 0.6);
+}
+
+.routines-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.routines-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.routines-editor-textarea {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.routines-editor-hint {
+  color: rgba(196, 176, 255, 0.85);
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+.routines-editor-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.routines-editor-preset {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.routines-editor-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.routines-editor-fieldset {
+  flex: 1 1 200px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.routines-editor-radios {
+  display: flex;
+  gap: 12px;
+}
+
+.routines-editor-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.routines-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.routines-pill-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.routines-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.routines-pill-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #7fdda6;
+  box-shadow: 0 0 8px rgba(127, 221, 166, 0.7);
+  animation: routines-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes routines-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.5; }
+}
+
+.routines-pop {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  max-height: 360px;
+  overflow: auto;
+  background: rgba(20, 20, 28, 0.97);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 50;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55);
+}
+
+.routines-pop-head {
+  font-weight: 600;
+  font-size: 13px;
+  color: #f4f4f7;
+}
+
+.routines-pop-empty {
+  font-size: 12px;
+  color: rgba(244, 244, 247, 0.5);
+}
+
+.routines-pop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.routines-pop-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.routines-pop-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.routines-pop-status {
+  width: 14px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.routines-pop-status-success { color: #7fdda6; }
+.routines-pop-status-failed { color: #ff8a8a; }
+.routines-pop-status-running { color: rgba(244, 244, 247, 0.5); }
+
+.routines-pop-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #f4f4f7;
+}
+
+.routines-pop-time {
+  color: rgba(244, 244, 247, 0.5);
+}
+
+.routines-pop-close {
+  align-self: flex-end;
+  background: transparent;
+  border: 0;
+  color: rgba(167, 139, 255, 0.85);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
