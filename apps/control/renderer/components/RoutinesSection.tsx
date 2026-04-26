@@ -5,6 +5,8 @@ import type {
   RoutineCreateInput,
   RoutineChannel,
   ClaudeModelId,
+  RoutineTemplate,
+  RoutineTemplateCategory,
 } from '../../src/server-types';
 import {
   listRoutines,
@@ -12,6 +14,7 @@ import {
   updateRoutine,
   deleteRoutine,
   runRoutineNow,
+  listRoutineLibrary,
 } from '../lib/api';
 import { explainCron, CRON_PRESETS } from '../lib/cron';
 
@@ -19,6 +22,16 @@ type EditorState =
   | { kind: 'closed' }
   | { kind: 'new' }
   | { kind: 'edit'; routine: RoutineSummary };
+
+type RoutinesTab = 'mine' | 'library';
+
+const CATEGORY_LABELS: Record<RoutineTemplateCategory, string> = {
+  daglig: 'Daglig',
+  ukentlig: 'Ukentlig',
+  codebase: 'Codebase',
+  'web-dev': 'Web-dev',
+  forretning: 'Forretning',
+};
 
 const CHANNEL_LABELS: Record<RoutineChannel, string> = {
   desktop: 'Desktop',
@@ -39,6 +52,7 @@ export function RoutinesSection() {
   const [editor, setEditor] = useState<EditorState>({ kind: 'closed' });
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<RoutinesTab>('mine');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -118,48 +132,224 @@ export function RoutinesSection() {
         en frisk samtale, så de er uavhengige av aktive tråder.
       </p>
 
-      <div className="settings-actions-row">
-        <button
-          type="button"
-          className="qt-btn-primary"
-          onClick={() => setEditor({ kind: 'new' })}
-        >
-          + Ny rutine
-        </button>
-        <button
-          type="button"
-          className="qt-btn-secondary"
-          onClick={() => void refresh()}
-          disabled={loading}
-        >
-          {loading ? 'Henter…' : 'Oppdater'}
-        </button>
-      </div>
-
-      {error && (
-        <div className="settings-status settings-status-fail">{error}</div>
-      )}
-
-      {!loading && routines.length === 0 && (
-        <div className="settings-hint">
-          Ingen rutiner enda. Trykk «+ Ny rutine» for å lage en.
-        </div>
-      )}
-
-      <div className="routines-list">
-        {routines.map((r) => (
-          <RoutineRow
-            key={r.id}
-            r={r}
-            busy={busyId === r.id}
-            onToggle={() => void handleToggle(r)}
-            onRun={() => void handleRunNow(r)}
-            onEdit={() => setEditor({ kind: 'edit', routine: r })}
-            onDelete={() => void handleDelete(r)}
-          />
+      <div
+        className="perm-segment"
+        role="radiogroup"
+        aria-label="Rutiner-fane"
+        style={{ marginBottom: 12 }}
+      >
+        {(['mine', 'library'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="radio"
+            aria-checked={tab === t}
+            className={
+              'perm-segment-btn' +
+              (tab === t ? ' perm-segment-btn-active' : '')
+            }
+            onClick={() => setTab(t)}
+          >
+            {t === 'mine' ? 'Mine rutiner' : 'Bibliotek'}
+          </button>
         ))}
       </div>
+
+      {tab === 'mine' && (
+        <>
+          <div className="settings-actions-row">
+            <button
+              type="button"
+              className="qt-btn-primary"
+              onClick={() => setEditor({ kind: 'new' })}
+            >
+              + Ny rutine
+            </button>
+            <button
+              type="button"
+              className="qt-btn-secondary"
+              onClick={() => void refresh()}
+              disabled={loading}
+            >
+              {loading ? 'Henter…' : 'Oppdater'}
+            </button>
+          </div>
+
+          {error && (
+            <div className="settings-status settings-status-fail">{error}</div>
+          )}
+
+          {!loading && routines.length === 0 && (
+            <div className="settings-hint">
+              Ingen rutiner enda. Trykk «+ Ny rutine» for å lage en, eller
+              bla gjennom <strong>Bibliotek</strong> for ferdige forslag.
+            </div>
+          )}
+
+          <div className="routines-list">
+            {routines.map((r) => (
+              <RoutineRow
+                key={r.id}
+                r={r}
+                busy={busyId === r.id}
+                onToggle={() => void handleToggle(r)}
+                onRun={() => void handleRunNow(r)}
+                onEdit={() => setEditor({ kind: 'edit', routine: r })}
+                onDelete={() => void handleDelete(r)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {tab === 'library' && (
+        <RoutineLibraryTab
+          existingNames={new Set(routines.map((r) => r.name))}
+          onActivated={async () => {
+            await refresh();
+            setTab('mine');
+          }}
+        />
+      )}
     </section>
+  );
+}
+
+interface LibraryTabProps {
+  existingNames: Set<string>;
+  onActivated: () => void | Promise<void>;
+}
+
+function RoutineLibraryTab({ existingNames, onActivated }: LibraryTabProps) {
+  const [templates, setTemplates] = useState<RoutineTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [activated, setActivated] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void listRoutineLibrary()
+      .then((list) => {
+        if (!cancelled) {
+          setTemplates(list);
+          setErr(null);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setErr(String((e as Error).message));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const grouped = useMemo(() => {
+    const map = new Map<RoutineTemplateCategory, RoutineTemplate[]>();
+    for (const t of templates) {
+      const arr = map.get(t.category) ?? [];
+      arr.push(t);
+      map.set(t.category, arr);
+    }
+    // Stable category order — daglig first, then ukentlig, then the rest.
+    const order: RoutineTemplateCategory[] = [
+      'daglig',
+      'ukentlig',
+      'codebase',
+      'web-dev',
+      'forretning',
+    ];
+    return order
+      .map((cat) => ({ cat, list: map.get(cat) ?? [] }))
+      .filter((g) => g.list.length > 0);
+  }, [templates]);
+
+  async function activate(t: RoutineTemplate) {
+    setBusyId(t.id);
+    try {
+      const payload: RoutineCreateInput = {
+        name: t.name,
+        prompt: t.prompt,
+        schedule: t.schedule,
+        enabled: true,
+        channel: t.channel,
+        ...(t.model ? { model: t.model as ClaudeModelId } : {}),
+      };
+      await createRoutine(payload);
+      setActivated((s) => new Set(s).add(t.id));
+      await onActivated();
+    } catch (e) {
+      setErr(String((e as Error).message));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="settings-status settings-status-idle" style={{ marginTop: 10 }}>
+        Henter biblioteket…
+      </div>
+    );
+  }
+
+  if (err) {
+    return (
+      <div className="settings-status settings-status-fail" style={{ marginTop: 10 }}>
+        {err}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="settings-section-sub" style={{ marginTop: 0 }}>
+        Ferdige rutiner du kan aktivere med ett klikk. De lagres som dine
+        egne — du kan redigere eller slette dem etter aktivering.
+      </p>
+      {grouped.map(({ cat, list }) => (
+        <div key={cat}>
+          <div className="routine-category-header">{CATEGORY_LABELS[cat]}</div>
+          <div className="routine-library-grid">
+            {list.map((t) => {
+              const isActivated =
+                activated.has(t.id) || existingNames.has(t.name);
+              return (
+                <div key={t.id} className="routine-template-card">
+                  <span className="routine-template-emoji" aria-hidden="true">
+                    {t.emoji}
+                  </span>
+                  <div className="routine-template-name">{t.name}</div>
+                  <div className="routine-template-desc">{t.description}</div>
+                  <div className="routine-template-schedule" title={t.schedule}>
+                    {explainCron(t.schedule)}
+                  </div>
+                  <button
+                    type="button"
+                    className={
+                      'routine-template-enable' +
+                      (isActivated ? ' enabled' : '')
+                    }
+                    disabled={isActivated || busyId === t.id}
+                    onClick={() => void activate(t)}
+                  >
+                    {isActivated
+                      ? '✓ Aktivert'
+                      : busyId === t.id
+                        ? 'Aktiverer…'
+                        : '+ Aktiver'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

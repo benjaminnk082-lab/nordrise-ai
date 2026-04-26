@@ -20,6 +20,7 @@ import { makeControlHistoryRouter } from './api/control/historyRoute.js';
 import { makeControlUploadRouter } from './api/control/uploadRoute.js';
 import { makeVaultRouter } from './api/control/vaultRoute.js';
 import { makeRoutinesRouter } from './api/control/routinesRoute.js';
+import { makeRoutineLibraryRouter } from './api/control/routineLibrary.js';
 import { startRoutinesRunner } from './api/control/routinesRunner.js';
 import { makeSuggestionsRouter } from './api/control/suggestionsRoute.js';
 import { makeControlPersonaRouter } from './api/control/personaRoute.js';
@@ -148,6 +149,10 @@ controlRouter.use(
     allowedTokens: controlTokens,
   }),
 );
+// Routine library — curated catalog of pre-built routine templates the
+// desktop client renders in Settings → Rutiner → "Bibliotek". Static list,
+// no DB; one-click "Aktiver" on the client just POSTs to /control/routines.
+controlRouter.use(makeRoutineLibraryRouter(controlTokens));
 // Suggestion queue — Sean's autonomous proposals. The bot + benjaminTelegramId
 // hooks up the "🔧 Jobber med forslag: …" status message when an approval
 // kicks off execution.

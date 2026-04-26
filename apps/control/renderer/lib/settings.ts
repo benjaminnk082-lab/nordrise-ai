@@ -11,6 +11,7 @@ export type DefaultModelChoice = ClaudeModelId | 'auto';
 export interface ConnectorSettings {
   firecrawl: { enabled: boolean; apiKey: string };
   github: { enabled: boolean; token: string };
+  vercel: { enabled: boolean; token: string };
 }
 
 export interface VaultSettings {
@@ -58,6 +59,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   connectors: {
     firecrawl: { enabled: false, apiKey: '' },
     github: { enabled: false, token: '' },
+    vercel: { enabled: false, token: '' },
   },
   vault: {
     enabled: false,
@@ -116,6 +118,10 @@ export function buildConnectorKeys(
   const gh = settings.connectors?.github;
   if (gh?.enabled && gh.token.trim()) {
     out.GITHUB_PERSONAL_ACCESS_TOKEN = gh.token.trim();
+  }
+  const vc = settings.connectors?.vercel;
+  if (vc?.enabled && vc.token.trim()) {
+    out.VERCEL_TOKEN = vc.token.trim();
   }
   return Object.keys(out).length ? out : undefined;
 }

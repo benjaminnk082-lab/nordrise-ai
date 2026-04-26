@@ -269,6 +269,16 @@ export function ChatPane({
                     GitHub
                   </span>
                 )}
+              {settings.connectors?.vercel?.enabled &&
+                settings.connectors.vercel.token.trim() && (
+                  <span
+                    className="connector-chip"
+                    title="Vercel: deploys / projects / logs aktiv"
+                  >
+                    <span aria-hidden="true">🚀</span>
+                    Vercel
+                  </span>
+                )}
               {hasCustomPrompt && (
                 <span
                   className="connector-chip thread-prompt-chip"

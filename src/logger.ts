@@ -15,12 +15,16 @@ const REDACT_PATHS = [
   // MCP connector keys — never log. Travel ephemerally per request.
   '*.FIRECRAWL_API_KEY',
   '*.GITHUB_PERSONAL_ACCESS_TOKEN',
+  '*.VERCEL_TOKEN',
   '*.connectorKeys.FIRECRAWL_API_KEY',
   '*.connectorKeys.GITHUB_PERSONAL_ACCESS_TOKEN',
+  '*.connectorKeys.VERCEL_TOKEN',
   'connectorKeys.FIRECRAWL_API_KEY',
   'connectorKeys.GITHUB_PERSONAL_ACCESS_TOKEN',
+  'connectorKeys.VERCEL_TOKEN',
   'req.body.connectorKeys.FIRECRAWL_API_KEY',
   'req.body.connectorKeys.GITHUB_PERSONAL_ACCESS_TOKEN',
+  'req.body.connectorKeys.VERCEL_TOKEN',
   // Per-user Claude OAuth token — supplied in /control/message body and
   // forwarded into the claude-code spawn env. Never persisted.
   '*.claudeAuthToken',

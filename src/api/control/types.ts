@@ -122,6 +122,31 @@ export interface RoutineCreateInput {
 
 export type RoutinePatchInput = Partial<RoutineCreateInput>;
 
+// ---------- Routine library (curated templates) ----------
+
+export type RoutineTemplateCategory =
+  | 'daglig'
+  | 'ukentlig'
+  | 'codebase'
+  | 'web-dev'
+  | 'forretning';
+
+export interface RoutineTemplate {
+  id: string;
+  name: string;
+  description: string;
+  emoji: string;
+  prompt: string;
+  schedule: string;
+  channel: RoutineChannel;
+  model?: string;
+  category: RoutineTemplateCategory;
+}
+
+export interface RoutineLibraryResponse {
+  templates: RoutineTemplate[];
+}
+
 // ---------- Suggestions ----------
 
 export type SuggestionStatus =

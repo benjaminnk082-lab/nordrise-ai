@@ -139,6 +139,7 @@ describe('POST /control/message', () => {
         connectorKeys: {
           FIRECRAWL_API_KEY: 'fc-secret-123',
           GITHUB_PERSONAL_ACCESS_TOKEN: 'ghp_secret_456',
+          VERCEL_TOKEN: 'vc-secret-789',
         },
       })
       .buffer(true)
@@ -150,6 +151,7 @@ describe('POST /control/message', () => {
     expect(bridge.lastInvoke?.env).toEqual({
       FIRECRAWL_API_KEY: 'fc-secret-123',
       GITHUB_PERSONAL_ACCESS_TOKEN: 'ghp_secret_456',
+      VERCEL_TOKEN: 'vc-secret-789',
     });
   });
   it('omits env when no connectorKeys provided', async () => {

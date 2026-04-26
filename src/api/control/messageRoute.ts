@@ -17,6 +17,7 @@ const ModelEnum = z.enum([
 const ConnectorKeysSchema = z.object({
   FIRECRAWL_API_KEY: z.string().min(1).max(512).optional(),
   GITHUB_PERSONAL_ACCESS_TOKEN: z.string().min(1).max(512).optional(),
+  VERCEL_TOKEN: z.string().min(1).max(512).optional(),
 });
 
 const BodySchema = z.object({
@@ -202,6 +203,9 @@ async function handle(req: Request, res: Response, deps: MessageRouterDeps): Pro
     }
     if (body.connectorKeys?.GITHUB_PERSONAL_ACCESS_TOKEN) {
       env.GITHUB_PERSONAL_ACCESS_TOKEN = body.connectorKeys.GITHUB_PERSONAL_ACCESS_TOKEN;
+    }
+    if (body.connectorKeys?.VERCEL_TOKEN) {
+      env.VERCEL_TOKEN = body.connectorKeys.VERCEL_TOKEN;
     }
     // Per-user Claude OAuth token overrides the server's default for this
     // subprocess. Spread order in the bridge ensures opts.env wins over

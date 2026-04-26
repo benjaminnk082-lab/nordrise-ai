@@ -2428,6 +2428,95 @@ input:-webkit-autofill:focus {
   color: #7fdda6;
 }
 
+/* Connector "Kommer"-stubs (Teams, Itslearning, Visma). UI-only —
+   greyed out, no inputs. Communicates roadmap. */
+.connector-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.connector-coming {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  margin-left: auto;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Routine library — Bibliotek-fane på Rutiner-seksjonen. */
+.routine-library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.routine-template-card {
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  transition: all 200ms;
+  display: flex;
+  flex-direction: column;
+}
+.routine-template-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.routine-template-emoji {
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+.routine-template-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(244, 244, 247, 0.95);
+}
+.routine-template-desc {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 4px;
+  line-height: 1.4;
+  flex: 1;
+}
+.routine-template-schedule {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 8px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.routine-template-enable {
+  margin-top: 10px;
+  width: 100%;
+  height: 30px;
+  border-radius: 8px;
+  border: 0;
+  background: linear-gradient(135deg, #a78bff, #7c5cff);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 140ms;
+}
+.routine-template-enable:hover { filter: brightness(1.05); }
+.routine-template-enable.enabled {
+  background: rgba(63, 197, 127, 0.15);
+  color: #3fc57f;
+  border: 1px solid rgba(63, 197, 127, 0.3);
+  cursor: not-allowed;
+}
+.routine-template-enable:disabled { cursor: not-allowed; }
+.routine-category-header {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 16px;
+  margin-bottom: 6px;
+}
+
 .settings-usage {
   display: inline-flex;
   align-items: baseline;

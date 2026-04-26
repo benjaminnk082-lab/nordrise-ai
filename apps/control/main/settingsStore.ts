@@ -30,6 +30,7 @@ export type DefaultModelChoice = ClaudeModelId | 'auto';
 export interface ConnectorSettings {
   firecrawl: { enabled: boolean; apiKey: string };
   github: { enabled: boolean; token: string };
+  vercel: { enabled: boolean; token: string };
 }
 
 /**
@@ -118,6 +119,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   connectors: {
     firecrawl: { enabled: false, apiKey: '' },
     github: { enabled: false, token: '' },
+    vercel: { enabled: false, token: '' },
   },
   vault: {
     enabled: false,
@@ -171,6 +173,10 @@ function load(): AppSettings {
           ...DEFAULT_SETTINGS.connectors.github,
           ...(parsed.connectors?.github ?? {}),
         },
+        vercel: {
+          ...DEFAULT_SETTINGS.connectors.vercel,
+          ...(parsed.connectors?.vercel ?? {}),
+        },
       },
       vault: {
         ...DEFAULT_SETTINGS.vault,
@@ -216,6 +222,10 @@ export function setSettings(patch: Partial<AppSettings>): AppSettings {
       github: {
         ...current.connectors.github,
         ...(patch.connectors?.github ?? {}),
+      },
+      vercel: {
+        ...current.connectors.vercel,
+        ...(patch.connectors?.vercel ?? {}),
       },
     },
     vault: {

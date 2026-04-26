@@ -6,6 +6,7 @@ import type {
   RoutineRunRecent,
   RoutineCreateInput,
   RoutinePatchInput,
+  RoutineTemplate,
   SuggestionSummary,
   SuggestionGenerateResult,
 } from '../../src/server-types';
@@ -141,6 +142,11 @@ export async function listRoutineRuns(id: string): Promise<RoutineRunRow[]> {
 export async function listRecentRuns(): Promise<RoutineRunRecent[]> {
   const r = await ipcFetch<{ runs: RoutineRunRecent[] }>('/control/routines/runs/recent');
   return r.runs;
+}
+
+export async function listRoutineLibrary(): Promise<RoutineTemplate[]> {
+  const r = await ipcFetch<{ templates: RoutineTemplate[] }>('/control/routine-library');
+  return r.templates;
 }
 
 // ---------- Reactions ----------

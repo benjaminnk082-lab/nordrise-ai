@@ -76,7 +76,8 @@ export function SettingsModal({
   const [pendingVersion, setPendingVersion] = useState<string | null>(null);
   const [showFirecrawlKey, setShowFirecrawlKey] = useState(false);
   const [showGithubKey, setShowGithubKey] = useState(false);
-  const [savedToast, setSavedToast] = useState<null | 'firecrawl' | 'github'>(null);
+  const [showVercelKey, setShowVercelKey] = useState(false);
+  const [savedToast, setSavedToast] = useState<null | 'firecrawl' | 'github' | 'vercel'>(null);
 
   const updateSettings = useCallback(
     async (patch: Partial<AppSettings>) => {
@@ -509,6 +510,137 @@ export function SettingsModal({
               >
                 ℹ Hjelp — opprett en PAT
               </button>
+            </div>
+
+            {/* Vercel */}
+            <div className="settings-connector-card">
+              <div className="settings-connector-head">
+                <span className="settings-connector-name">🚀 Vercel</span>
+                <label className="settings-toggle">
+                  <input
+                    type="checkbox"
+                    checked={settings.connectors.vercel.enabled}
+                    onChange={(e) =>
+                      void updateSettings({
+                        connectors: {
+                          ...settings.connectors,
+                          vercel: {
+                            ...settings.connectors.vercel,
+                            enabled: e.target.checked,
+                          },
+                        },
+                      })
+                    }
+                  />
+                  <span>Aktiv</span>
+                </label>
+              </div>
+              <p className="settings-connector-desc">
+                Deploys, preview-URLs, prosjekt-status. Trenger Personal
+                Access Token fra vercel.com/account/tokens (gratis).
+              </p>
+              <div
+                className={`settings-key-row ${
+                  !settings.connectors.vercel.enabled
+                    ? 'settings-key-row-disabled'
+                    : ''
+                }`}
+              >
+                <input
+                  type={showVercelKey ? 'text' : 'password'}
+                  className="settings-field-input"
+                  placeholder="vercel-token…"
+                  value={settings.connectors.vercel.token}
+                  disabled={!settings.connectors.vercel.enabled}
+                  spellCheck={false}
+                  autoComplete="off"
+                  onChange={(e) =>
+                    void updateSettings({
+                      connectors: {
+                        ...settings.connectors,
+                        vercel: {
+                          ...settings.connectors.vercel,
+                          token: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+                <button
+                  type="button"
+                  className="settings-key-toggle"
+                  onClick={() => setShowVercelKey((v) => !v)}
+                  disabled={!settings.connectors.vercel.enabled}
+                  aria-label={showVercelKey ? 'Skjul token' : 'Vis token'}
+                >
+                  {showVercelKey ? 'Skjul' : 'Vis'}
+                </button>
+                <button
+                  type="button"
+                  className="qt-btn-secondary"
+                  disabled={
+                    !settings.connectors.vercel.enabled ||
+                    !settings.connectors.vercel.token.trim()
+                  }
+                  onClick={() => {
+                    setSavedToast('vercel');
+                    setTimeout(
+                      () =>
+                        setSavedToast((t) => (t === 'vercel' ? null : t)),
+                      1800,
+                    );
+                  }}
+                >
+                  Test
+                </button>
+              </div>
+              {savedToast === 'vercel' && (
+                <span className="settings-toast">
+                  ✓ Lagret. Faktisk test skjer når Sean prøver å bruke
+                  connectoren.
+                </span>
+              )}
+              <button
+                type="button"
+                className="settings-help-link"
+                onClick={() =>
+                  void shellApi.openExternal('https://vercel.com/account/tokens')
+                }
+              >
+                ℹ Hjelp — opprett et Vercel-token
+              </button>
+            </div>
+
+            {/* Stubs — Teams / Itslearning / Visma. UI-only, no functionality.
+                Communicates roadmap; v0.4.0 ships the real integrations. */}
+            <div className="settings-connector-card connector-disabled">
+              <div className="settings-connector-head">
+                <span className="settings-connector-name">👥 Microsoft Teams</span>
+                <span className="connector-coming">Kommer i v0.4.0</span>
+              </div>
+              <p className="settings-connector-desc">
+                Lese meldinger, sende svar, planlegge møter via MS Graph.
+              </p>
+            </div>
+
+            <div className="settings-connector-card connector-disabled">
+              <div className="settings-connector-head">
+                <span className="settings-connector-name">📚 Itslearning</span>
+                <span className="connector-coming">Kommer</span>
+              </div>
+              <p className="settings-connector-desc">
+                Hente oppgaver, levere innleveringer, sjekke karakterer.
+              </p>
+            </div>
+
+            <div className="settings-connector-card connector-disabled">
+              <div className="settings-connector-head">
+                <span className="settings-connector-name">🏫 Visma InSchool</span>
+                <span className="connector-coming">Kommer</span>
+              </div>
+              <p className="settings-connector-desc">
+                Timeplan, fravær, beskjeder fra skolen.
+              </p>
             </div>
           </section>
 
