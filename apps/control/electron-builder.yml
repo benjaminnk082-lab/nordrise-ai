@@ -29,12 +29,16 @@ win:
   target:
     - target: nsis
       arch: [x64]
+  icon: ../installer/assets/nordrise-icon.ico
   publisherName: "Nordrise"
 
 nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+  installerIcon: ../installer/assets/nordrise-icon.ico
+  uninstallerIcon: ../installer/assets/nordrise-icon.ico
+  installerHeaderIcon: ../installer/assets/nordrise-icon.ico
   deleteAppDataOnUninstall: false
   shortcutName: "Nordrise Control"
   createDesktopShortcut: true

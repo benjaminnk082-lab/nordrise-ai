@@ -59,7 +59,7 @@ export function TokenLogin({ onDone }: { onDone: (token: string) => void }) {
       <form onSubmit={submit} className="login-shell">
         <div className="brand">
           <div className="logo-orb">
-            <span className="logo-orb-mark">N</span>
+            <img src="/assets/logo.png" alt="Nordrise" className="logo-image" />
           </div>
           <div className="brand-text">
             <h1 className="brand-title">Nordrise Control</h1>

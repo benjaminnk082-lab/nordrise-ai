@@ -198,6 +198,15 @@ input:-webkit-autofill:focus {
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
+.logo-image {
+  position: relative;
+  z-index: 1;
+  width: 60%;
+  height: 60%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.4));
+}
+
 .brand-text {
   text-align: center;
   display: flex;
@@ -1229,4 +1238,155 @@ input:-webkit-autofill:focus {
   .thread-rail {
     display: none;
   }
+}
+
+/* ============================================================
+   Update banner — visible relaunch prompt after auto-download
+   ============================================================ */
+
+.update-banner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  margin: 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(124, 92, 255, 0.22), rgba(124, 92, 255, 0.10));
+  border: 1px solid rgba(124, 92, 255, 0.4);
+  box-shadow: 0 4px 18px rgba(124, 92, 255, 0.20);
+}
+
+.update-banner-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 2px;
+}
+
+.update-banner-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.update-banner-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.update-banner-btn {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #a78bff, #7c5cff);
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(124, 92, 255, 0.35);
+  transition: transform 140ms ease, filter 200ms ease;
+}
+
+.update-banner-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.update-banner-btn:active {
+  transform: translateY(0);
+}
+
+/* ============================================================
+   Attachment chips + drag&drop overlay
+   ============================================================ */
+
+.composer-wrap {
+  position: relative;
+}
+
+.composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 22px 0;
+}
+
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 10px;
+  margin: 2px;
+  border-radius: 8px;
+  background: rgba(124, 92, 255, 0.15);
+  border: 1px solid rgba(124, 92, 255, 0.3);
+  font-size: 12px;
+  color: #d6c8ff;
+  max-width: 280px;
+}
+
+.attachment-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  background: transparent;
+  color: rgba(214, 200, 255, 0.6);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.attachment-chip-remove:hover {
+  color: #ff8a8a;
+  background: rgba(255, 138, 138, 0.1);
+}
+
+.attachment-chip-uploading {
+  opacity: 0.65;
+}
+
+.attachment-chip-error {
+  background: rgba(255, 138, 138, 0.10);
+  border-color: rgba(255, 138, 138, 0.40);
+  color: #ff8a8a;
+}
+
+.dropzone-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.dropzone-overlay {
+  position: absolute;
+  inset: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(124, 92, 255, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 2px dashed rgba(124, 92, 255, 0.6);
+  border-radius: 18px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #d6c8ff;
+  z-index: 100;
+  pointer-events: none;
+  letter-spacing: -0.01em;
 }

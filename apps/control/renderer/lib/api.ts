@@ -60,6 +60,34 @@ export async function listHistory(
   return r.messages;
 }
 
+export interface UploadResult {
+  fileId: string;
+  workspacePath: string;
+  filename: string;
+  size: number;
+}
+
+export async function uploadFile(file: File): Promise<UploadResult> {
+  const data = await file.arrayBuffer();
+  const r = await window.nordrise.invoke<{
+    ok: boolean;
+    status: number;
+    body: UploadResult & { error?: string; error_code?: string };
+  }>('control:upload', {
+    filename: file.name,
+    mime: file.type || 'application/octet-stream',
+    data,
+  });
+  if (!r.ok) {
+    const detail =
+      (typeof r.body === 'object' && r.body !== null
+        ? (r.body.error ?? r.body.error_code)
+        : null) ?? 'unknown';
+    throw new Error(`upload failed (${r.status}): ${detail}`);
+  }
+  return r.body as UploadResult;
+}
+
 export interface SseFrame {
   event: string;
   data: Record<string, unknown> & { text?: string; message?: string };

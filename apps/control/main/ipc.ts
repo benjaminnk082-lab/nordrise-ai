@@ -1,6 +1,6 @@
 import { ipcMain, net, app } from 'electron';
 import { setToken, getToken, deleteToken } from './keychain.js';
-import { getPendingUpdateVersion } from './autoUpdate.js';
+import { getPendingUpdateVersion, quitAndInstall } from './autoUpdate.js';
 
 const DEFAULT_BACKEND = 'https://sean-production-4fcf.up.railway.app';
 const TOKEN_SLOT = 'bearer';
@@ -30,6 +30,7 @@ interface StreamStartPayload {
 export function registerIpc(): void {
   ipcMain.handle('app:version', () => app.getVersion());
   ipcMain.handle('app:pending-update', () => getPendingUpdateVersion());
+  ipcMain.handle('app:quit-and-install', () => { quitAndInstall(); });
 
   ipcMain.handle('auth:get-token', () => getToken(TOKEN_SLOT));
   ipcMain.handle('auth:set-token', (_e, token: string) => setToken(TOKEN_SLOT, token));
@@ -74,6 +75,49 @@ export function registerIpc(): void {
           'Content-Type': 'application/json',
         },
         body: payload.body !== undefined ? JSON.stringify(payload.body) : undefined,
+      });
+      const text = await r.text();
+      let body: unknown;
+      try { body = JSON.parse(text); } catch { body = text; }
+      return { ok: r.ok, status: r.status, body };
+    } catch (err) {
+      return { ok: false, status: 0, body: { error: String((err as Error).message) } };
+    }
+  });
+
+  // Multipart upload bridge — renderer reads the dropped File into an
+  // ArrayBuffer (which structured-clones cleanly across IPC) and main
+  // reconstructs FormData so the backend sees a normal multipart POST.
+  // This avoids CORS and keeps the renderer Node-free.
+  ipcMain.handle('control:upload', async (
+    _e,
+    payload: { filename: string; mime: string; data: ArrayBuffer | Uint8Array },
+  ) => {
+    const backend = process.env.NORDRISE_BACKEND_URL ?? DEFAULT_BACKEND;
+    const token = await getToken(TOKEN_SLOT);
+    if (!token) return { ok: false, status: 401, body: { error: 'no_token' } };
+    try {
+      // FormData / Blob are globals in Node 20+ (Electron 33 ships Node 20).
+      // The `tsconfig.main.json` doesn't include the DOM lib so we cast to
+      // `any` for the constructor call to keep the type-checker happy.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const FD = (globalThis as any).FormData;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const BlobCtor = (globalThis as any).Blob;
+      const fd = new FD();
+      const bytes =
+        payload.data instanceof Uint8Array
+          ? payload.data
+          : new Uint8Array(payload.data);
+      fd.append(
+        'file',
+        new BlobCtor([bytes], { type: payload.mime }),
+        payload.filename,
+      );
+      const r = await netFetch(`${backend}/control/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
       });
       const text = await r.text();
       let body: unknown;

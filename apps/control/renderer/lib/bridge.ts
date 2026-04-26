@@ -29,3 +29,7 @@ export async function getAppVersion(): Promise<string> {
 export async function getPendingUpdate(): Promise<string | null> {
   return window.nordrise.invoke<string | null>('app:pending-update');
 }
+
+export async function quitAndInstall(): Promise<void> {
+  await window.nordrise.invoke<void>('app:quit-and-install');
+}

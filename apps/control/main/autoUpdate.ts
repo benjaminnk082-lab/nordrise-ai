@@ -1,7 +1,7 @@
 // electron-updater is CommonJS — import as default and destructure to satisfy NodeNext ESM.
 import pkg from 'electron-updater';
 const { autoUpdater } = pkg;
-import { app } from 'electron';
+import { app, BrowserWindow } from 'electron';
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -11,7 +11,10 @@ export function initAutoUpdate(): void {
   if (!app.isPackaged) return;
 
   autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  // v0.1.10: explicit user action required. The renderer shows a
+  // "Versjon X er klar — Relaunch nå" banner and the user clicks to
+  // install. Closing the app no longer triggers the installer.
+  autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.allowPrerelease = false;
 
   autoUpdater.on('error', (err) => {
@@ -31,9 +34,10 @@ export function initAutoUpdate(): void {
   });
   autoUpdater.on('update-downloaded', (info) => {
     pendingUpdateVersion = info.version;
-    console.log(`[autoUpdate] downloaded ${info.version} — will install when app quits`);
-    // Do NOT prompt; user wanted silent quit-and-install behaviour.
-    // autoInstallOnAppQuit takes care of running the installer on app.quit().
+    console.log(`[autoUpdate] downloaded ${info.version} — pushing notification to renderer`);
+    for (const w of BrowserWindow.getAllWindows()) {
+      w.webContents.send('app:update-downloaded', { version: info.version });
+    }
   });
 
   // Initial check on boot, then every hour while the app is running.
@@ -43,4 +47,10 @@ export function initAutoUpdate(): void {
 
 export function getPendingUpdateVersion(): string | null {
   return pendingUpdateVersion;
+}
+
+export function quitAndInstall(): void {
+  // (isSilent=false ensures the installer is visible so the user can see
+  //  it actually run; isForceRunAfter=true relaunches the app afterwards.)
+  autoUpdater.quitAndInstall(false, true);
 }

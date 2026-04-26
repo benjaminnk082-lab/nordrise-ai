@@ -5,9 +5,10 @@ import { listMessages, listSessions, newSession } from '../lib/api';
 import { useThreadState } from '../state/thread';
 import { useStream } from '../hooks/useStream';
 import { ThreadList, type ActiveSelection } from './ThreadList';
-import { ChatPane } from './ChatPane';
+import { ChatPane, type ReadyAttachment } from './ChatPane';
 import { ThinkingPanel } from './ThinkingPanel';
 import { TelegramHistory } from './TelegramHistory';
+import { quitAndInstall, getPendingUpdate } from '../lib/bridge';
 
 export interface AppShellProps {
   version: string;
@@ -25,6 +26,27 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
   const [active, setActive] = useState<ActiveSelection>({ kind: 'new' });
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messagesError, setMessagesError] = useState<string | null>(null);
+
+  // The renderer hydrates this once on mount from the main-process cache so
+  // the banner appears even if the `app:update-downloaded` push event fired
+  // before the renderer was listening (e.g. during the initial check on boot).
+  const [updateReady, setUpdateReady] = useState<{ version: string } | null>(
+    pendingUpdate ? { version: pendingUpdate } : null,
+  );
+
+  useEffect(() => {
+    const off = window.nordrise.on('app:update-downloaded', (info: unknown) => {
+      const v = (info as { version?: string } | undefined)?.version;
+      if (v) setUpdateReady({ version: v });
+    });
+    // Belt-and-suspenders hydrate from cache on mount.
+    void getPendingUpdate().then((v) => {
+      if (v) setUpdateReady((prev) => prev ?? { version: v });
+    });
+    return () => {
+      off();
+    };
+  }, []);
 
   const {
     state,
@@ -120,14 +142,21 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
   });
 
   const handleSubmit = useCallback(
-    (text: string) => {
+    (text: string, attachments: ReadyAttachment[]) => {
       const userId = newId('u');
       const assistantId = newId('a');
       activeAssistantId.current = assistantId;
-      send(userId, assistantId, text, new Date().toISOString());
+      // Decorate the user-bubble with a small indicator when files are attached.
+      const decoratedText = attachments.length
+        ? `${text}${text ? '\n\n' : ''}_(${attachments.length} fil${
+            attachments.length === 1 ? '' : 'er'
+          } vedlagt: ${attachments.map((a) => a.filename).join(', ')})_`
+        : text;
+      send(userId, assistantId, decoratedText, new Date().toISOString());
       stream.start({
         controlSessionId: active.kind === 'session' ? active.id : null,
         text,
+        attachments: attachments.length ? attachments : undefined,
       });
     },
     [active, send, stream],
@@ -159,6 +188,26 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
   return (
     <div className="shell-frame-wrap">
       <div className="shell-frame">
+        {updateReady && (
+          <div className="update-banner" role="status">
+            <div className="update-banner-text">
+              <span className="update-banner-title">
+                Versjon {updateReady.version} er klar
+              </span>
+              <span className="update-banner-sub">
+                Relaunch for å installere oppdateringen.
+              </span>
+            </div>
+            <button
+              type="button"
+              className="update-banner-btn"
+              onClick={() => void quitAndInstall()}
+            >
+              Relaunch nå
+            </button>
+          </div>
+        )}
+
         <div className="shell-grid">
           <ThreadList
             sessions={sessions}
@@ -194,9 +243,9 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
           </span>
           <span className="shell-foot-meta">
             v{version || '?'}
-            {pendingUpdate && (
+            {updateReady && (
               <span className="shell-foot-update">
-                · oppdatering {pendingUpdate} klar
+                · oppdatering {updateReady.version} klar
               </span>
             )}
           </span>
