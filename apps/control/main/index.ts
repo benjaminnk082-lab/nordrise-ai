@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { mainWindowOptions } from './windows.js';
 import { registerIpc } from './ipc.js';
 import { initTray, setTrayStatus } from './tray.js';
+import { initAutoUpdate } from './autoUpdate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -13,17 +14,30 @@ function preloadPath(): string {
   return join(__dirname, '..', 'preload', 'index.js');
 }
 
-function rendererURL(): string {
-  if (process.env.NODE_ENV === 'development') {
-    return 'http://localhost:4001';
-  }
-  return `file://${join(__dirname, '..', 'renderer', 'index.html')}`;
-}
-
 async function createMainWindow() {
   mainWin = new BrowserWindow(mainWindowOptions(preloadPath()));
-  await mainWin.loadURL(rendererURL());
-  mainWin.once('ready-to-show', () => mainWin?.show());
+
+  // Show the window after a hard timeout so a renderer-load failure doesn't leave it invisible.
+  const showFallback = setTimeout(() => {
+    if (mainWin && !mainWin.isVisible()) mainWin.show();
+  }, 3_000);
+
+  mainWin.once('ready-to-show', () => {
+    clearTimeout(showFallback);
+    mainWin?.show();
+  });
+
+  if (process.env.NODE_ENV === 'development') {
+    await mainWin.loadURL('http://localhost:4001');
+  } else {
+    // loadFile handles Windows paths with spaces; loadURL('file://...') doesn't reliably.
+    await mainWin.loadFile(join(__dirname, '..', 'renderer', 'index.html'));
+  }
+
+  mainWin.webContents.on('did-fail-load', (_e, errorCode, errorDescription, validatedURL) => {
+    console.error('renderer failed to load', { errorCode, errorDescription, validatedURL });
+  });
+
   mainWin.on('closed', () => { mainWin = null; });
 }
 
@@ -42,6 +56,7 @@ app.whenReady().then(async () => {
       setTrayStatus('red');
     }
   }, 30_000);
+  initAutoUpdate();
 });
 
 app.on('window-all-closed', () => {
