@@ -36,6 +36,11 @@ import {
   stopProactiveEngine,
   type ProactiveDeps,
 } from './api/control/proactiveEngine.js';
+import { makeAppImprovementRouter } from './api/control/appImprovementRoute.js';
+import {
+  startAppImprovementWatcher,
+  stopAppImprovementWatcher,
+} from './api/control/appImprovementWatcher.js';
 
 const app = express();
 
@@ -114,6 +119,7 @@ controlRouter.use(
   makeControlMessageRouter({
     mgr: controlSessionManager,
     makeBridge: () => new ClaudeBridge(),
+    makeRetrievalBridge: () => new ClaudeBridge(),
     allowedTokens: controlTokens,
     prisma,
   }),
@@ -179,6 +185,16 @@ const proactiveDeps: ProactiveDeps = {
 controlRouter.use(
   makeProactiveRouter({ prisma, engineDeps: proactiveDeps, allowedTokens: controlTokens }),
 );
+// App-improvements — Sean's self-improvement queue. The watcher cron runs
+// daily 02:00 (started in main()); this router exposes list/scan-now/approve/
+// reject/delete. Approve fires off Opus spec generation in the background.
+controlRouter.use(
+  makeAppImprovementRouter({
+    prisma,
+    seanNotesDir,
+    allowedTokens: controlTokens,
+  }),
+);
 app.use('/control', controlRouter);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
@@ -213,6 +229,13 @@ async function main() {
     logger.error({ err }, 'proactive engine failed to start (continuing)');
   }
 
+  // App-improvement watcher — daily 02:00. Best-effort; never fatal.
+  try {
+    await startAppImprovementWatcher({ prisma });
+  } catch (err) {
+    logger.error({ err }, 'app-improvement watcher failed to start (continuing)');
+  }
+
   // Periodic codebase pull. The boot-time clone happens in
   // docker-entrypoint.sh; this runtime tick keeps Sean's reference fresh
   // throughout long uptimes. Failures are logged at WARN and never fatal —
@@ -243,6 +266,7 @@ async function main() {
     clearInterval(codebasePullTimer);
     stopSuggestionsGenerator();
     stopProactiveEngine();
+    stopAppImprovementWatcher();
     server.close(() => {
       void prisma.$disconnect().finally(() => process.exit(0));
     });

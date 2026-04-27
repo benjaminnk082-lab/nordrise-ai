@@ -1,12 +1,14 @@
 import { Router, type Request, type Response } from 'express';
+import { join } from 'node:path';
 import { z } from 'zod';
 import type { PrismaClient } from '@prisma/client';
 import { config } from '../../config.js';
 import { logger } from '../../logger.js';
-import type { ClaudeBridge } from '../../claudeBridge.js';
+import { ClaudeBridge } from '../../claudeBridge.js';
 import type { ControlSessionManager } from '../../controlSessionManager.js';
 import { makeRequireControlToken } from './auth.js';
 import { openSseStream, writeSseFrame, startHeartbeat } from './stream.js';
+import { retrieveContext } from './retrieval.js';
 
 const ModelEnum = z.enum([
   'claude-opus-4-7',
@@ -61,6 +63,12 @@ export interface MessageRouterDeps {
    * doesn't expose either, so we read directly here.
    */
   prisma: PrismaClient;
+  /**
+   * Optional factory for the per-message retrieval bridge (Haiku keyword
+   * pass). Defaults to a fresh `ClaudeBridge`. Tests pass a stub that
+   * returns canned keyword JSON to avoid spawning `claude`.
+   */
+  makeRetrievalBridge?: () => Pick<ClaudeBridge, 'invoke'>;
 }
 
 /**
@@ -225,12 +233,38 @@ async function handle(req: Request, res: Response, deps: MessageRouterDeps): Pro
       logger.warn({ err, controlSessionId: session.id }, 'extra system prompt compose failed');
     }
 
+    // Active retrieval — fire-and-forget per spec. Best-effort: any failure
+    // here returns '' so the message proceeds without retrieved context.
+    // Uses a fresh bridge with model=Haiku for a tiny keyword extraction call.
+    let retrievedContext = '';
+    try {
+      const vaultDir = join(config.WORKSPACE_DIR, 'vault');
+      const retrievalBridge = deps.makeRetrievalBridge
+        ? deps.makeRetrievalBridge()
+        : new ClaudeBridge();
+      retrievedContext = await retrieveContext({
+        vaultDir,
+        message: body.text,
+        bridge: retrievalBridge,
+      });
+    } catch (err) {
+      logger.warn({ err: (err as Error).message }, 'retrieval crashed (continuing)');
+    }
+
+    const finalExtra = [extraSystemPrompt, retrievedContext]
+      .map((s) => (typeof s === 'string' ? s.trim() : ''))
+      .filter((s) => s.length > 0)
+      .join('\n\n---\n\n');
+
     const result = await bridge.invoke({
       message: prompt,
       sessionId: session.claudeSessionId,
       ...(body.model ? { model: body.model } : {}),
       ...(Object.keys(env).length ? { env } : {}),
-      ...(extraSystemPrompt ? { extraSystemPrompt } : {}),
+      ...(finalExtra ? { extraSystemPrompt: finalExtra } : {}),
+      // Self-critique pass: when reply is long (>500 chars), run a Haiku
+      // critique to refine. Defaults to true — short replies are unaffected.
+      selfCritique: true,
       signal: ac.signal,
     });
 

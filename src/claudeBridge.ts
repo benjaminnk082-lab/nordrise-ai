@@ -57,6 +57,15 @@ export interface ClaudeBridgeOptions {
    * Empty/whitespace-only strings are ignored.
    */
   extraSystemPrompt?: string;
+  /**
+   * When true and the first reply text exceeds 500 chars and is not an
+   * error, run a follow-up Haiku critique pass that returns the final
+   * cleaned-up text. Skipped for short replies and errors. The critique
+   * call always uses Haiku regardless of the original `model` to keep
+   * cost low. Default: false. The critique pass uses a fresh bridge with
+   * `selfCritique: false` so we never recurse.
+   */
+  selfCritique?: boolean;
   signal?: AbortSignal;
 }
 
@@ -149,7 +158,35 @@ export class ClaudeBridge extends EventEmitter {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    return this.driveSubprocess(child, started, opts.signal);
+    const result = await this.driveSubprocess(child, started, opts.signal);
+
+    // Self-critique pass — refine long, non-error replies through Haiku.
+    if (
+      opts.selfCritique &&
+      !result.isError &&
+      !result.rateLimited &&
+      typeof result.text === 'string' &&
+      result.text.length > 500
+    ) {
+      try {
+        const refined = await runCritique({
+          userMessage: opts.message,
+          draft: result.text,
+          env: opts.env,
+          signal: opts.signal,
+        });
+        if (refined && refined.length > 50) {
+          return { ...result, text: refined };
+        }
+      } catch (err) {
+        logger.warn(
+          { err: (err as Error).message },
+          'self-critique pass failed; using original draft',
+        );
+      }
+    }
+
+    return result;
   }
 
   private driveSubprocess(
@@ -294,6 +331,50 @@ export class ClaudeBridge extends EventEmitter {
       });
     });
   }
+}
+
+/**
+ * Run the Haiku critique pass. Spawns a fresh `ClaudeBridge` with
+ * `selfCritique: false` so we never recurse. The persona prompt path is
+ * inherited from the default constructor; the critique meta-prompt is
+ * built into the message body itself, NOT into the system prompt, to keep
+ * the persona unchanged for the critique call.
+ *
+ * Returns the refined text (or empty string when the result is unusable).
+ * Caller decides whether to substitute it for the original draft based on
+ * a length sanity check.
+ */
+async function runCritique(opts: {
+  userMessage: string;
+  draft: string;
+  env?: Record<string, string>;
+  signal?: AbortSignal;
+}): Promise<string> {
+  const critiquePrompt = `Du er Sean i kritikk-modus. Du har akkurat skrevet et utkast til svar. Vurder kritisk:
+1. Svarer det faktisk på spørsmålet?
+2. Er det fyll/redundans som kan kuttes?
+3. Mangler det noe vesentlig?
+4. Er tonen riktig (kort, direkte, norsk)?
+
+Brukerens spørsmål:
+${opts.userMessage}
+
+Ditt utkast:
+${opts.draft}
+
+Hvis utkastet er bra som det er, returner kun teksten. Hvis det trenger forbedringer, returner forbedret versjon. INGEN forklaring rundt — bare den endelige teksten Sean skal sende.`;
+
+  const critiqueBridge = new ClaudeBridge();
+  const result = await critiqueBridge.invoke({
+    message: critiquePrompt,
+    sessionId: null,
+    model: 'claude-haiku-4-5',
+    selfCritique: false,
+    ...(opts.env ? { env: opts.env } : {}),
+    ...(opts.signal ? { signal: opts.signal } : {}),
+  });
+  if (result.isError || result.rateLimited) return '';
+  return (result.text ?? '').trim();
 }
 
 function sanitizedEnv(): NodeJS.ProcessEnv {

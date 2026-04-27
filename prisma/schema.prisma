@@ -148,3 +148,27 @@ model ProactiveSettings {
   cadenceMin      Int      @default(15)
   updatedAt       DateTime @updatedAt
 }
+
+/// Sean's self-improvement proposals. The watcher cron analyses recent
+/// usage data (messages / suggestions / routines / proactive attempts) and
+/// drafts up to 3 specific app improvements per pass. The user approves
+/// promising ones; an Opus-driven background task then writes a detailed
+/// implementation spec to /app/workspace/sean-notes/app-improvements/<date>-<slug>.md
+/// which the existing sean-notes -> vault sync surfaces in Obsidian.
+model AppImprovement {
+  id              String    @id @default(cuid())
+  category        String    // 'bug-fix' | 'feature' | 'ux' | 'performance' | 'security'
+  title           String
+  description     String    @db.Text
+  rationale       String    @db.Text
+  patternEvidence String?   @db.Text
+  proposedSpec    String?   @db.Text
+  status          String    @default("pending") // 'pending' | 'approved' | 'spec-written' | 'rejected' | 'implemented'
+  createdAt       DateTime  @default(now())
+  approvedAt      DateTime?
+  specWrittenAt   DateTime?
+  vaultPath       String?
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+}

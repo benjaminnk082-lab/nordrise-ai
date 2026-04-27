@@ -30,6 +30,7 @@ import { createHash } from 'node:crypto';
 import { join, normalize, relative, isAbsolute } from 'node:path';
 import { logger } from '../../logger.js';
 import { makeRequireControlToken } from './auth.js';
+import { invalidateVaultCache } from './retrieval.js';
 
 export interface VaultRouterDeps {
   /** absolute path to the synced vault folder, e.g. /app/workspace/vault */
@@ -160,6 +161,9 @@ export function makeVaultRouter(deps: VaultRouterDeps): Router {
       res.status(500).json({ error: 'write_failed' });
       return;
     }
+    // Vault content changed — drop the retrieval cache so the next
+    // /control/message keyword pass sees fresh contents.
+    invalidateVaultCache();
     logger.info({ rel, size: req.file.size }, 'vault file written');
     res.json({ ok: true, path: rel });
   });
@@ -180,6 +184,7 @@ export function makeVaultRouter(deps: VaultRouterDeps): Router {
     } catch {
       // idempotent — already gone is success
     }
+    invalidateVaultCache();
     res.json({ ok: true });
   });
 

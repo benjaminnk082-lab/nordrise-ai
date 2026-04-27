@@ -142,6 +142,27 @@ Skriv til /app/workspace/sean-notes/journal/<dato>.md (append).`,
     channel: 'desktop',
     model: 'claude-haiku-4-5',
   },
+  {
+    id: 'sean-dreams',
+    emoji: '🌙',
+    name: 'Sean Dreams (nattlig oppsummering)',
+    description:
+      'Hver natt 03:00: Sean går gjennom alle samtaler og vault-endringer fra siste døgn, oppdaterer MEMORY.md, og genererer morgenforslag.',
+    category: 'daglig',
+    prompt: `Dette er Sean Dreams. Du har 5 min mens Benjamin sover. Gjør følgende i rekkefølge:
+
+1. Les /app/workspace/vault/Sean/MEMORY.md hvis den finnes
+2. Sjekk hvilke filer i vaulten som ble endret siste døgn (bruk find + mtime)
+3. Les nye notater og oppdateringer
+4. Skriv en kondensert dagsoppsummering til /app/workspace/sean-notes/journal/<dagens-dato>.md
+5. Oppdater /app/workspace/sean-notes/MEMORY.md med eventuelle nye fakta du har lært
+6. Skriv 1-3 morgenforslag til /app/workspace/sean-notes/morning/<imorgen-dato>.md (hva Benjamin kan vurdere å fokusere på)
+
+Hold deg under 5000 tegn total output. Ikke send Telegram (kanal er desktop). Norsk.`,
+    schedule: '0 3 * * *',
+    channel: 'desktop',
+    model: 'claude-sonnet-4-6',
+  },
 ];
 
 export function makeRoutineLibraryRouter(allowedTokens: readonly string[]): Router {

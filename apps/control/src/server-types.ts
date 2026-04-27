@@ -235,3 +235,40 @@ export interface ProactiveRunNowResult {
   reason?: string | null;
   category?: ProactiveCategory | string | null;
 }
+
+// ---------- App-improvements (self-improvement) ----------
+
+export type AppImprovementCategory =
+  | 'bug-fix'
+  | 'feature'
+  | 'ux'
+  | 'performance'
+  | 'security';
+
+export type AppImprovementStatus =
+  | 'pending'
+  | 'approved'
+  | 'spec-written'
+  | 'rejected'
+  | 'implemented';
+
+export interface AppImprovementRow {
+  id: string;
+  category: AppImprovementCategory | string;
+  title: string;
+  description: string;
+  rationale: string;
+  patternEvidence: string | null;
+  proposedSpec: string | null;
+  status: AppImprovementStatus | string;
+  createdAt: string;
+  approvedAt: string | null;
+  specWrittenAt: string | null;
+  vaultPath: string | null;
+}
+
+export interface AppImprovementScanResult {
+  generated: number;
+  skipped: boolean;
+  reason?: string;
+}
