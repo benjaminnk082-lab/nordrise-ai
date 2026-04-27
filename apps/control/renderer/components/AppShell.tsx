@@ -7,6 +7,8 @@ import {
   newSession,
   setReaction,
   clearReaction,
+  togglePin,
+  listPinned,
 } from '../lib/api';
 import { useThreadState } from '../state/thread';
 import { useStream } from '../hooks/useStream';
@@ -21,6 +23,8 @@ import { RoutinesPill } from './RoutinesPill';
 import { SuggestionsPill } from './SuggestionsPill';
 import { SeanNotesPanel } from './SeanNotesPanel';
 import { SeanStatusPill } from './SeanStatusPill';
+import { GlobalSearch } from './GlobalSearch';
+import { PinnedPanel } from './PinnedPanel';
 import { vaultApi } from '../lib/vault';
 import { quitAndInstall, getPendingUpdate } from '../lib/bridge';
 import {
@@ -63,6 +67,9 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
   const [seanNotesCount, setSeanNotesCount] = useState(0);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [ollamaAvailable, setOllamaAvailable] = useState(false);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [pinnedPanelOpen, setPinnedPanelOpen] = useState(false);
+  const [pinnedCount, setPinnedCount] = useState(0);
 
   // Hydrate settings on mount, and re-detect Ollama whenever the host /
   // enabled flag changes so the routing heuristic can react.
@@ -135,6 +142,7 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
     onError,
     resetDrafts,
     setReactionLocal,
+    setPinnedLocal,
   } = useThreadState();
 
   const activeAssistantId = useRef<string | null>(null);
@@ -269,6 +277,18 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
     onError('avbrutt');
   }, [stream, onError]);
 
+  // Regenerate the last assistant reply by re-sending the last user message.
+  // We don't delete the previous assistant message — it stays in history so
+  // the user can compare. Pure client-side: same code path as handleSubmit.
+  const handleRegenerate = useCallback(
+    (text: string) => {
+      if (state.streaming) return;
+      if (!text.trim()) return;
+      handleSubmit(text, []);
+    },
+    [state.streaming, handleSubmit],
+  );
+
   const handleReact = useCallback(
     (messageId: string, next: ReactionValue | null) => {
       // Optimistic local update so the bubble flips instantly. The persist
@@ -287,6 +307,42 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
     [setReactionLocal],
   );
 
+  // Toggle pin — optimistic flip, then server reads true value and we sync.
+  const refreshPinnedCount = useCallback(async () => {
+    try {
+      const list = await listPinned();
+      setPinnedCount(list.length);
+    } catch {
+      // Silently ignore — pill stays at last known value.
+    }
+  }, []);
+
+  const handleTogglePin = useCallback(
+    (messageId: string) => {
+      // Find current state in serverMessages so we know what to optimistically
+      // set. If the message isn't tracked locally (e.g. user clicked from
+      // pinned panel), we just dispatch without a flip — the server reply
+      // will tell us the truth.
+      const target = state.serverMessages.find((m) => m.id === messageId);
+      const next = target ? !target.pinned : true;
+      setPinnedLocal(messageId, next);
+      void (async () => {
+        try {
+          const r = await togglePin(messageId);
+          if (target && r.pinned !== next) {
+            setPinnedLocal(messageId, r.pinned);
+          }
+        } catch (err) {
+          console.warn('pin toggle failed', err);
+          if (target) setPinnedLocal(messageId, !next); // rollback
+        } finally {
+          void refreshPinnedCount();
+        }
+      })();
+    },
+    [setPinnedLocal, state.serverMessages, refreshPinnedCount],
+  );
+
   const handleSystemPromptChanged = useCallback(
     (sid: string, next: string | null) => {
       // Apply the change locally so the chip updates without waiting for
@@ -299,17 +355,29 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
     [refreshSessions],
   );
 
-  // Ctrl+K opens the quick-task palette anywhere in the shell.
+  // Ctrl+K opens the quick-task palette; Ctrl+F opens the global search.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         setPaletteOpen(true);
       }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        setGlobalSearchOpen(true);
+      }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Initial pinned-count load + light poll so the footer pill matches the
+  // server. We use 60s; this is a low-volume signal, no need to hammer.
+  useEffect(() => {
+    void refreshPinnedCount();
+    const t = setInterval(() => void refreshPinnedCount(), 60_000);
+    return () => clearInterval(t);
+  }, [refreshPinnedCount]);
 
   const handlePalettePick = useCallback(
     (text: string) => {
@@ -398,6 +466,8 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
                 setSettings(next);
               }}
               onReact={handleReact}
+              onTogglePin={handleTogglePin}
+              onRegenerate={handleRegenerate}
               onSystemPromptChanged={handleSystemPromptChanged}
             />
           )}
@@ -430,6 +500,37 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
           </button>
           <RoutinesPill />
           <SuggestionsPill />
+          <button
+            type="button"
+            onClick={() => setPinnedPanelOpen(true)}
+            className="link-button"
+            title="Pinet meldinger"
+          >
+            Pinet
+            {pinnedCount > 0 && (
+              <span
+                style={{
+                  marginLeft: 6,
+                  padding: '1px 6px',
+                  borderRadius: 999,
+                  background: 'linear-gradient(90deg,#ffd23c,#ffaa3c)',
+                  color: '#1a0f0a',
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+              >
+                {pinnedCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setGlobalSearchOpen(true)}
+            className="link-button"
+            title="Søk (Ctrl+F)"
+          >
+            Søk
+          </button>
           {settings.vault.enabled && (
             <button
               type="button"
@@ -498,6 +599,21 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
             /* ignore */
           }
         }}
+      />
+      <GlobalSearch
+        open={globalSearchOpen}
+        onClose={() => setGlobalSearchOpen(false)}
+        vaultRoot={settings.vault.enabled ? settings.vault.localPath : ''}
+        onSelectMessage={(controlSessionId, _messageId) => {
+          if (controlSessionId) setActive({ kind: 'session', id: controlSessionId });
+        }}
+      />
+      <PinnedPanel
+        open={pinnedPanelOpen}
+        onClose={() => setPinnedPanelOpen(false)}
+        onSelectThread={(controlSessionId) =>
+          setActive({ kind: 'session', id: controlSessionId })
+        }
       />
     </div>
   );

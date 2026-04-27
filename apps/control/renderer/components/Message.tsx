@@ -40,6 +40,19 @@ export interface MessageProps {
    * upserts. Parent owns the optimistic update + fetch.
    */
   onReact?: (messageId: string, next: ReactionValue | null) => void;
+  /**
+   * True iff this message is pinned. Star icon flips state via onTogglePin.
+   * Skipped for drafts (no server id).
+   */
+  pinned?: boolean;
+  onTogglePin?: (messageId: string) => void;
+  /**
+   * True for the LAST assistant message in the thread. When set, the
+   * regenerate button renders next to the reactions so the user can retry
+   * with the same prompt.
+   */
+  canRegenerate?: boolean;
+  onRegenerate?: () => void;
 }
 
 /**
@@ -95,6 +108,10 @@ export function Message({
   reaction = null,
   messageId,
   onReact,
+  pinned = false,
+  onTogglePin,
+  canRegenerate = false,
+  onRegenerate,
 }: MessageProps) {
   const time = formatTime(createdAt);
   const senderLabel =
@@ -106,12 +123,26 @@ export function Message({
         ? 'System'
         : 'Sean';
 
+  const canPin = !!messageId && !!onTogglePin && !streaming && !thinking && !error;
+
   if (role === 'user') {
     return (
       <div className="bubble-row bubble-row-user">
         <div className="bubble-meta bubble-meta-right">
           <span>{senderLabel}</span>
           {time && <span className="bubble-meta-time">{time}</span>}
+          {canPin && (
+            <button
+              type="button"
+              className={`pin-btn ${pinned ? 'pin-btn-active' : ''}`}
+              onClick={() => onTogglePin!(messageId!)}
+              aria-label={pinned ? 'Avfest melding' : 'Fest melding'}
+              aria-pressed={pinned}
+              title={pinned ? 'Avfest' : 'Fest melding'}
+            >
+              <span aria-hidden="true">{pinned ? '★' : '☆'}</span>
+            </button>
+          )}
         </div>
         <div className="bubble-user">{content}</div>
       </div>
@@ -172,34 +203,61 @@ export function Message({
           </div>
         )}
       </div>
-      {canReact && (
+      {(canReact || canPin || canRegenerate) && (
         <div className="message-reactions">
-          <button
-            type="button"
-            className={
-              'reaction-btn' +
-              (reaction === 'up' ? ' reaction-active reaction-up' : '')
-            }
-            onClick={() => handleReact('up')}
-            aria-label="Bra svar"
-            aria-pressed={reaction === 'up'}
-            title="Bra svar"
-          >
-            <span aria-hidden="true">👍</span>
-          </button>
-          <button
-            type="button"
-            className={
-              'reaction-btn' +
-              (reaction === 'down' ? ' reaction-active reaction-down' : '')
-            }
-            onClick={() => handleReact('down')}
-            aria-label="Dårlig svar"
-            aria-pressed={reaction === 'down'}
-            title="Endre tilnærming"
-          >
-            <span aria-hidden="true">👎</span>
-          </button>
+          {canReact && (
+            <>
+              <button
+                type="button"
+                className={
+                  'reaction-btn' +
+                  (reaction === 'up' ? ' reaction-active reaction-up' : '')
+                }
+                onClick={() => handleReact('up')}
+                aria-label="Bra svar"
+                aria-pressed={reaction === 'up'}
+                title="Bra svar"
+              >
+                <span aria-hidden="true">👍</span>
+              </button>
+              <button
+                type="button"
+                className={
+                  'reaction-btn' +
+                  (reaction === 'down' ? ' reaction-active reaction-down' : '')
+                }
+                onClick={() => handleReact('down')}
+                aria-label="Dårlig svar"
+                aria-pressed={reaction === 'down'}
+                title="Endre tilnærming"
+              >
+                <span aria-hidden="true">👎</span>
+              </button>
+            </>
+          )}
+          {canPin && (
+            <button
+              type="button"
+              className={`pin-btn ${pinned ? 'pin-btn-active' : ''}`}
+              onClick={() => onTogglePin!(messageId!)}
+              aria-label={pinned ? 'Avfest melding' : 'Fest melding'}
+              aria-pressed={pinned}
+              title={pinned ? 'Avfest' : 'Fest melding'}
+            >
+              <span aria-hidden="true">{pinned ? '★' : '☆'}</span>
+            </button>
+          )}
+          {canRegenerate && onRegenerate && (
+            <button
+              type="button"
+              className="reaction-btn"
+              onClick={() => onRegenerate()}
+              aria-label="Regenerer svar"
+              title="Regenerer svar"
+            >
+              <span aria-hidden="true">🔄</span>
+            </button>
+          )}
         </div>
       )}
     </div>

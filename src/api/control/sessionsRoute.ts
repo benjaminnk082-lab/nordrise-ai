@@ -3,7 +3,11 @@ import { z } from 'zod';
 import type { PrismaClient } from '@prisma/client';
 import { ControlSessionManager } from '../../controlSessionManager.js';
 import { makeRequireControlToken } from './auth.js';
-import type { ControlSessionSummary, ControlMessageRow } from './types.js';
+import type {
+  ControlSessionSummary,
+  ControlMessageRow,
+  PinnedMessage,
+} from './types.js';
 
 const PatchSessionBody = z
   .object({
@@ -143,6 +147,8 @@ export function makeControlSessionsRouter(deps: SessionsRouterDeps): Router {
       reaction: m.reaction
         ? (m.reaction.value as 'up' | 'down')
         : null,
+      pinned: m.pinned ?? false,
+      controlSessionId: m.controlSessionId ?? null,
     }));
     res.json({ messages: out });
   });
@@ -186,6 +192,47 @@ export function makeControlSessionsRouter(deps: SessionsRouterDeps): Router {
       // Idempotent — already gone is success.
     }
     res.json({ ok: true });
+  });
+
+  // Pin / unpin a message. Toggle semantics — current value is read first,
+  // then flipped. Returns the new pinned state so the renderer can keep
+  // optimistic UI in sync without an extra GET.
+  r.post('/messages/:id/pin', auth, async (req, res) => {
+    const m = await deps.prisma.message.findUnique({
+      where: { id: req.params.id! },
+      select: { id: true, pinned: true },
+    });
+    if (!m) {
+      res.status(404).json({ error: 'not_found' });
+      return;
+    }
+    const next = !(m.pinned ?? false);
+    await deps.prisma.message.update({
+      where: { id: m.id },
+      data: { pinned: next },
+    });
+    res.json({ ok: true, pinned: next });
+  });
+
+  // Pinned-message index — flat list across all sessions, newest first.
+  // Cap at 100 so the side panel doesn't have to virtualise. Includes the
+  // owning thread title so the renderer can group by thread.
+  r.get('/messages/pinned', auth, async (_req, res) => {
+    const rows = await deps.prisma.message.findMany({
+      where: { pinned: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: { controlSession: { select: { title: true } } },
+    });
+    const pinned: PinnedMessage[] = rows.map((m) => ({
+      id: m.id,
+      controlSessionId: m.controlSessionId ?? null,
+      sessionTitle: m.controlSession?.title ?? null,
+      role: m.role as PinnedMessage['role'],
+      content: m.content,
+      createdAt: m.createdAt.toISOString(),
+    }));
+    res.json({ pinned });
   });
 
   return r;

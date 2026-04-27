@@ -87,3 +87,22 @@ export async function testClaudeAuthToken(token: string): Promise<ClaudeAuthTest
     token,
   );
 }
+
+// ---------- Window chrome ----------
+
+/**
+ * Apply the user's preferred opacity to the host BrowserWindow. Clamped
+ * server-side to [0.7, 1.0]. Cosmetic only — does not affect behaviour.
+ */
+export async function setWindowOpacity(opacity: number): Promise<boolean> {
+  return window.nordrise.invoke<boolean>('window:set-opacity', opacity);
+}
+
+/**
+ * Open a local file path with the OS default app. Used to open vault
+ * markdown specs in the user's preferred editor (Obsidian on dev box,
+ * Notepad fallback elsewhere). Returns false if the path was invalid.
+ */
+export async function openPath(path: string): Promise<boolean> {
+  return window.nordrise.invoke<boolean>('shell:open-path', path);
+}

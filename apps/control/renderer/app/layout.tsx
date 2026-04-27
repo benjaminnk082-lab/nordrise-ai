@@ -1,5 +1,6 @@
 import './globals.css';
 import type { ReactNode } from 'react';
+import { ThemeApplier } from '../components/ThemeApplier';
 
 export const metadata = {
   title: 'Nordrise Control',
@@ -8,8 +9,11 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="nb">
-      <body>{children}</body>
+    <html lang="nb" data-theme="dark">
+      <body>
+        <ThemeApplier />
+        {children}
+      </body>
     </html>
   );
 }

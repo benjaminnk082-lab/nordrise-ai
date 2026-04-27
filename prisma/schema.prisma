@@ -45,10 +45,14 @@ model Message {
   tokens           Int?
   durationMs       Int?
   createdAt        DateTime        @default(now())
+  /// Pinned messages — surfaced via `Pinet` panel in the desktop app and
+  /// listed in the global-search modal. Additive flag, defaults false.
+  pinned           Boolean         @default(false)
   reaction         Reaction?
 
   @@index([sessionId, createdAt])
   @@index([controlSessionId, createdAt])
+  @@index([pinned, createdAt])
 }
 
 model Reaction {

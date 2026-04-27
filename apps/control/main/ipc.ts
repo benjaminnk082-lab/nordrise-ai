@@ -315,6 +315,30 @@ export function registerIpc(): void {
   );
   ipcMain.handle('settings:reset', () => resetSettings());
 
+  // Apply the user's preferred opacity to the BrowserWindow that initiated
+  // the call. Clamped to [0.7, 1.0]. Cosmetic only.
+  ipcMain.handle('window:set-opacity', (e, opacity: number) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    if (!w) return false;
+    const clamped = Math.max(0.7, Math.min(1.0, Number(opacity) || 1.0));
+    w.setOpacity(clamped);
+    return true;
+  });
+
+  // Open a local file path with the OS default app. Used by the
+  // app-improvements UI to open the spec markdown in the user's vault.
+  // Strict: rejects non-string / empty inputs and surfaces the result.
+  ipcMain.handle('shell:open-path', async (_e, path: string) => {
+    if (typeof path !== 'string' || !path.trim()) return false;
+    try {
+      const err = await shell.openPath(path);
+      // shell.openPath resolves to '' on success, or an error message
+      return err === '' || err === undefined;
+    } catch {
+      return false;
+    }
+  });
+
   // Ollama (localhost only)
   ipcMain.handle('ollama:detect', (_e, host: string) => detectOllama(host));
   ipcMain.handle('ollama:list-models', (_e, host: string) =>

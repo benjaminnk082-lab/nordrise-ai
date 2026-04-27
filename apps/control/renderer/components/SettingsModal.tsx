@@ -8,7 +8,21 @@ import {
   type DefaultModelChoice,
   type PermissionMode,
   type PermissionSettings,
+  type ThemeId,
 } from '../lib/settings';
+import {
+  appImprovementsApi,
+  listProactiveAttempts,
+  listRecentRuns,
+  listSuggestions,
+} from '../lib/api';
+import type {
+  AppImprovementRow,
+  ProactiveAttemptRow,
+  RoutineRunRecent,
+  SuggestionSummary,
+} from '../../src/server-types';
+import { setWindowOpacity, openPath } from '../lib/bridge';
 import {
   setStoredToken,
   verifyToken,
@@ -193,6 +207,15 @@ export function SettingsModal({
         </div>
 
         <div className="settings-body">
+          {/* VISNING — theme picker + opacity slider */}
+          <DisplaySection
+            theme={settings.theme}
+            windowOpacity={settings.windowOpacity}
+            onChangeTheme={(t) => void updateSettings({ theme: t })}
+            onChangeOpacity={(o) => void updateSettings({ windowOpacity: o })}
+          />
+          <div className="settings-divider" />
+
           {/* MODELL */}
           <section className="settings-section">
             <h3 className="settings-section-title">Modell</h3>
@@ -661,6 +684,16 @@ export function SettingsModal({
 
           {/* SEAN'S HUKOMMELSE */}
           <MemoryStreamSection />
+
+          <div className="settings-divider" />
+
+          {/* AKTIVITET — merged audit log */}
+          <AuditLogSection />
+
+          <div className="settings-divider" />
+
+          {/* APP-FORBEDRINGER — Sean's self-improvement queue */}
+          <AppImprovementsSection />
 
           <div className="settings-divider" />
 
@@ -1581,6 +1614,420 @@ function MemoryStreamSection() {
             </div>
           );
         })}
+      </div>
+    </section>
+  );
+}
+
+const THEME_OPTIONS: { id: ThemeId; label: string; sub: string }[] = [
+  { id: 'dark', label: 'Default', sub: 'Mørk lilla' },
+  { id: 'light', label: 'Light', sub: 'Lys' },
+  { id: 'solar', label: 'Solar', sub: 'Varm oransje' },
+  { id: 'cyberpunk', label: 'Cyberpunk', sub: 'Høy kontrast' },
+  { id: 'compact', label: 'Compact', sub: 'Tett-pakket' },
+];
+
+interface DisplaySectionProps {
+  theme: ThemeId;
+  windowOpacity: number;
+  onChangeTheme: (theme: ThemeId) => void;
+  onChangeOpacity: (opacity: number) => void;
+}
+
+/**
+ * Visning — theme picker + window-opacity slider. The theme is applied
+ * immediately by mutating the data-theme attribute (so the user sees the
+ * change without waiting for the IPC roundtrip). Opacity goes through
+ * Electron's setOpacity in main.
+ */
+function DisplaySection({
+  theme,
+  windowOpacity,
+  onChangeTheme,
+  onChangeOpacity,
+}: DisplaySectionProps) {
+  function applyTheme(next: ThemeId) {
+    document.documentElement.setAttribute('data-theme', next);
+    onChangeTheme(next);
+  }
+  function applyOpacity(next: number) {
+    onChangeOpacity(next);
+    void setWindowOpacity(next).catch(() => undefined);
+  }
+  const opacityPct = Math.round((windowOpacity ?? 1.0) * 100);
+  return (
+    <section className="settings-section">
+      <h3 className="settings-section-title">Visning</h3>
+      <p className="settings-section-sub">
+        Velg fargetema og hvor gjennomsiktig vinduet skal være.
+      </p>
+      <div className="theme-grid">
+        {THEME_OPTIONS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={`theme-card ${theme === t.id ? 'theme-card-active' : ''}`}
+            onClick={() => applyTheme(t.id)}
+            aria-pressed={theme === t.id}
+          >
+            <span>{t.label}</span>
+            <span className="theme-sub">{t.sub}</span>
+          </button>
+        ))}
+      </div>
+      <div className="opacity-row">
+        <label htmlFor="window-opacity">Vinduets gjennomsiktighet</label>
+        <input
+          id="window-opacity"
+          type="range"
+          min="0.7"
+          max="1"
+          step="0.05"
+          value={windowOpacity ?? 1.0}
+          onChange={(e) => applyOpacity(Number(e.target.value))}
+        />
+        <span>{opacityPct}%</span>
+      </div>
+    </section>
+  );
+}
+
+type AuditEvent = {
+  ts: number;
+  iso: string;
+  icon: string;
+  text: string;
+  detail?: string;
+};
+
+/**
+ * Merge proactive attempts + routine runs + suggestion executions +
+ * app-improvement events into a single timeline, newest-first. Cap at 50
+ * to keep the modal lightweight; users can scroll the list within its
+ * 360px scroll-region.
+ */
+function AuditLogSection() {
+  const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [attempts, runs, suggestions, improvements] = await Promise.all([
+        listProactiveAttempts().catch(() => [] as ProactiveAttemptRow[]),
+        listRecentRuns().catch(() => [] as RoutineRunRecent[]),
+        listSuggestions().catch(() => [] as SuggestionSummary[]),
+        appImprovementsApi.list().catch(() => [] as AppImprovementRow[]),
+      ]);
+      const merged: AuditEvent[] = [];
+      for (const a of attempts.slice(0, 30)) {
+        const ts = new Date(a.triggeredAt).getTime();
+        const icon =
+          a.decision === 'sent'
+            ? '💬'
+            : a.decision === 'rate_limited'
+              ? '⏱'
+              : '⏸';
+        const text =
+          a.decision === 'sent'
+            ? 'Sean sendte en proaktiv melding'
+            : `Proaktiv: ${a.decision}`;
+        merged.push({
+          ts,
+          iso: a.triggeredAt,
+          icon,
+          text,
+          detail: a.message ?? a.reason ?? undefined,
+        });
+      }
+      for (const r of runs.slice(0, 30)) {
+        const ts = new Date(r.startedAt).getTime();
+        merged.push({
+          ts,
+          iso: r.startedAt,
+          icon: r.status === 'success' ? '✓' : r.status === 'failed' ? '✗' : '🔧',
+          text: `Routine: ${r.routineName}`,
+          detail: r.errorMsg ?? undefined,
+        });
+      }
+      for (const s of suggestions.slice(0, 30)) {
+        const ts = new Date(s.createdAt).getTime();
+        const icon =
+          s.status === 'done' ? '✅' : s.status === 'rejected' ? '✗' : '💡';
+        merged.push({
+          ts,
+          iso: s.createdAt,
+          icon,
+          text: `Forslag: ${s.title}`,
+          detail: s.status,
+        });
+      }
+      for (const i of improvements.slice(0, 30)) {
+        const ts = new Date(i.createdAt).getTime();
+        const icon =
+          i.category === 'bug-fix'
+            ? '🐛'
+            : i.category === 'feature'
+              ? '⭐'
+              : '🔧';
+        merged.push({
+          ts,
+          iso: i.createdAt,
+          icon,
+          text: `App-forbedring: ${i.title}`,
+          detail: i.status,
+        });
+      }
+      merged.sort((a, b) => b.ts - a.ts);
+      setEvents(merged.slice(0, 50));
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  return (
+    <section className="settings-section">
+      <h3 className="settings-section-title">Aktivitet</h3>
+      <p className="settings-section-sub">
+        Tidslinje over Sean&apos;s autonome aktivitet — rutiner, forslag,
+        proaktive meldinger og app-forbedringer. Nyeste først.
+      </p>
+      <div className="settings-actions-row" style={{ marginTop: 8 }}>
+        <button
+          type="button"
+          className="qt-btn-secondary"
+          onClick={() => void refresh()}
+        >
+          {loading ? 'Laster…' : 'Oppdater'}
+        </button>
+      </div>
+      {error && (
+        <div
+          className="settings-status settings-status-fail"
+          style={{ marginTop: 10 }}
+        >
+          {error}
+        </div>
+      )}
+      <div className="audit-list">
+        {events.length === 0 && !loading && (
+          <div className="audit-text-muted" style={{ padding: 12 }}>
+            Ingen aktivitet ennå.
+          </div>
+        )}
+        {events.map((ev, i) => {
+          const date = new Date(ev.ts);
+          const stamp = date.toLocaleString('nb-NO', {
+            month: 'short',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          return (
+            <div key={`${ev.iso}-${i}`} className="audit-row">
+              <span className="audit-icon">{ev.icon}</span>
+              <span className="audit-time">{stamp}</span>
+              <span className="audit-text">
+                {ev.text}
+                {ev.detail && (
+                  <span className="audit-text-muted">
+                    {' '}
+                    · {ev.detail.slice(0, 80)}
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+const APP_IMPROV_CATEGORY_ICON: Record<string, string> = {
+  'bug-fix': '🐛',
+  feature: '⭐',
+  ux: '🎨',
+  performance: '⚡',
+  security: '🔐',
+};
+
+/**
+ * App-forbedringer — Sean&apos;s self-improvement queue. Cards with approve /
+ * reject / open spec / delete actions. Spec opens via shell.openPath which
+ * uses the OS default markdown editor (Obsidian on Benjamin&apos;s box).
+ */
+function AppImprovementsSection() {
+  const [rows, setRows] = useState<AppImprovementRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const list = await appImprovementsApi.list();
+      setRows(list);
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  async function scanNow() {
+    setScanning(true);
+    try {
+      await appImprovementsApi.scanNow();
+      await refresh();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setScanning(false);
+    }
+  }
+  async function approve(id: string) {
+    setBusyId(id);
+    try {
+      await appImprovementsApi.approve(id);
+      await refresh();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setBusyId(null);
+    }
+  }
+  async function reject(id: string) {
+    setBusyId(id);
+    try {
+      await appImprovementsApi.reject(id);
+      await refresh();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setBusyId(null);
+    }
+  }
+  async function del(id: string) {
+    if (!confirm('Slett denne forbedringen?')) return;
+    setBusyId(id);
+    try {
+      await appImprovementsApi.delete(id);
+      await refresh();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <section className="settings-section">
+      <h3 className="settings-section-title">App-forbedringer</h3>
+      <p className="settings-section-sub">
+        Sean overvåker hvordan du bruker appen og foreslår konkrete
+        forbedringer. Auto-scan kjøres daglig 02:00; du kan også trigge nå.
+      </p>
+      <div className="settings-actions-row" style={{ marginTop: 8 }}>
+        <button
+          type="button"
+          className="qt-btn-secondary"
+          onClick={() => void scanNow()}
+          disabled={scanning}
+        >
+          {scanning ? 'Skanner…' : 'Generer nå'}
+        </button>
+        <button
+          type="button"
+          className="qt-btn-secondary"
+          onClick={() => void refresh()}
+          disabled={loading}
+        >
+          {loading ? 'Laster…' : 'Oppdater'}
+        </button>
+      </div>
+      {error && (
+        <div
+          className="settings-status settings-status-fail"
+          style={{ marginTop: 10 }}
+        >
+          {error}
+        </div>
+      )}
+      <div className="aimprov-list">
+        {!loading && rows.length === 0 && (
+          <div className="audit-text-muted">Ingen forbedringer foreslått ennå.</div>
+        )}
+        {rows.map((r) => (
+          <div key={r.id} className="aimprov-card">
+            <div className="aimprov-card-head">
+              <span>
+                {APP_IMPROV_CATEGORY_ICON[r.category] ?? '🔧'} {r.category}
+              </span>
+              <span className={`aimprov-status-${r.status}`}>{r.status}</span>
+            </div>
+            <div className="aimprov-card-title">{r.title}</div>
+            <div className="aimprov-card-desc">{r.description}</div>
+            {r.patternEvidence && (
+              <div className="aimprov-card-desc" style={{ fontStyle: 'italic' }}>
+                Mønster: {r.patternEvidence}
+              </div>
+            )}
+            <div className="aimprov-card-actions">
+              {r.status === 'pending' && (
+                <>
+                  <button
+                    type="button"
+                    className="qt-btn-primary"
+                    onClick={() => void approve(r.id)}
+                    disabled={busyId === r.id}
+                  >
+                    Godkjenn
+                  </button>
+                  <button
+                    type="button"
+                    className="qt-btn-secondary"
+                    onClick={() => void reject(r.id)}
+                    disabled={busyId === r.id}
+                  >
+                    Avvis
+                  </button>
+                </>
+              )}
+              {r.status === 'spec-written' && r.vaultPath && (
+                <button
+                  type="button"
+                  className="qt-btn-secondary"
+                  onClick={() => void openPath(r.vaultPath!)}
+                >
+                  Åpne spec
+                </button>
+              )}
+              <button
+                type="button"
+                className="qt-btn-secondary"
+                onClick={() => void del(r.id)}
+                disabled={busyId === r.id}
+              >
+                Slett
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   );

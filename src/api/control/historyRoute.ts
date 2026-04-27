@@ -45,6 +45,8 @@ export function makeControlHistoryRouter(deps: HistoryRouterDeps): Router {
       reaction: m.reaction
         ? (m.reaction.value as 'up' | 'down')
         : null,
+      pinned: m.pinned ?? false,
+      controlSessionId: m.controlSessionId ?? null,
     }));
     res.json({ messages });
   });

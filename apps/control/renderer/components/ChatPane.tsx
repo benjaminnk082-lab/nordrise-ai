@@ -9,6 +9,28 @@ import { uploadFile } from '../lib/api';
 import { type AppSettings, modelLabel } from '../lib/settings';
 import { ThreadSettingsModal } from './ThreadSettingsModal';
 
+function exportConversationToMarkdown(
+  threadName: string,
+  messages: Array<{ role: string; content: string; createdAt: string }>,
+): void {
+  const lines: string[] = [`# ${threadName}\n\n`];
+  for (const m of messages) {
+    const sender = m.role === 'user' ? 'Du' : m.role === 'assistant' ? 'Sean' : 'System';
+    const stamp = new Date(m.createdAt).toLocaleString('nb-NO');
+    lines.push(`### ${sender} · ${stamp}\n\n`);
+    lines.push(m.content.trim() + '\n\n---\n\n');
+  }
+  const blob = new Blob([lines.join('')], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  // Sanitize filename — strip slashes/colons/control chars.
+  const safe = threadName.replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80) || 'samtale';
+  a.download = `${safe}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export interface ReadyAttachment {
   fileId: string;
   workspacePath: string;
@@ -38,6 +60,17 @@ export interface ChatPaneProps {
    */
   onReact?: (messageId: string, next: ReactionValue | null) => void;
   /**
+   * Toggle the pinned state on a message. Parent persists + updates local
+   * state so the star icon flips instantly.
+   */
+  onTogglePin?: (messageId: string) => void;
+  /**
+   * Regenerate the last assistant reply by re-sending the last user message.
+   * Parent decides whether to clear the assistant draft first; here we just
+   * fire the request. Disabled while streaming.
+   */
+  onRegenerate?: (text: string) => void;
+  /**
    * Called when the user changes the per-thread system prompt via the
    * settings modal. The parent should refresh its session list so the
    * "✨ Custom prompt"-chip stays in sync after navigation.
@@ -61,12 +94,15 @@ export function ChatPane({
   ollamaAvailable,
   onChangeThreadModel,
   onReact,
+  onTogglePin,
+  onRegenerate,
   onSystemPromptChanged,
 }: ChatPaneProps) {
   const [draftText, setDraftText] = useState('');
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [threadSettingsOpen, setThreadSettingsOpen] = useState(false);
+  const [overflowOpen, setOverflowOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const hasCustomPrompt = !!knownSession?.systemPrompt;
@@ -96,6 +132,7 @@ export function ChatPane({
         // Reaction is only persisted on server messages — drafts haven't
         // earned an id yet so they can't carry one.
         reaction: m.reaction ?? null,
+        pinned: m.pinned ?? false,
         content: m.content,
         createdAt: m.createdAt,
         source: m.source,
@@ -108,6 +145,7 @@ export function ChatPane({
         kind: d.kind,
         id: d.id,
         reaction: null as ReactionValue | null,
+        pinned: false,
         content: d.content,
         createdAt: d.createdAt,
         source: 'desktop' as const,
@@ -118,6 +156,24 @@ export function ChatPane({
       })),
     ];
   }, [state.serverMessages, state.drafts]);
+
+  // Find the last user message text for the regenerate flow + the index of
+  // the LAST assistant message so we only render the regenerate button on
+  // that bubble. We use server messages only — drafts don't qualify.
+  const lastUserText = useMemo(() => {
+    for (let i = state.serverMessages.length - 1; i >= 0; i--) {
+      const m = state.serverMessages[i];
+      if (m && m.role === 'user') return m.content;
+    }
+    return '';
+  }, [state.serverMessages]);
+  const lastAssistantPersistedId = useMemo(() => {
+    for (let i = state.serverMessages.length - 1; i >= 0; i--) {
+      const m = state.serverMessages[i];
+      if (m && m.role === 'assistant') return m.id;
+    }
+    return null;
+  }, [state.serverMessages]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -319,6 +375,57 @@ export function ChatPane({
                   />
                 </svg>
               </button>
+              <div className="pane-overflow-wrap">
+                <button
+                  type="button"
+                  className="pane-overflow-btn"
+                  onClick={() => setOverflowOpen((v) => !v)}
+                  aria-haspopup="menu"
+                  aria-expanded={overflowOpen}
+                  aria-label="Mer"
+                  title="Mer"
+                >
+                  ⋯
+                </button>
+                {overflowOpen && (
+                  <div className="pane-overflow-menu" role="menu">
+                    <button
+                      type="button"
+                      className="pane-overflow-item"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        // Use the persisted server messages (drafts may be
+                        // mid-stream and incomplete). Title is the active
+                        // pane title, falling back to the date.
+                        exportConversationToMarkdown(
+                          title,
+                          state.serverMessages.map((m) => ({
+                            role: m.role,
+                            content: m.content,
+                            createdAt: m.createdAt,
+                          })),
+                        );
+                      }}
+                      role="menuitem"
+                    >
+                      Eksporter samtale (.md)
+                    </button>
+                    {!!lastUserText && onRegenerate && !state.streaming && (
+                      <button
+                        type="button"
+                        className="pane-overflow-item"
+                        onClick={() => {
+                          setOverflowOpen(false);
+                          onRegenerate(lastUserText);
+                        }}
+                        role="menuitem"
+                      >
+                        🔄 Regenerer siste svar
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -356,21 +463,37 @@ export function ChatPane({
               )}
             </div>
           )}
-          {displayMessages.map((m) => (
-            <Message
-              key={m.id}
-              role={m.kind}
-              content={m.content}
-              createdAt={m.createdAt}
-              source={m.source}
-              streaming={m.streaming}
-              thinking={m.thinking}
-              error={m.error}
-              reaction={m.reaction}
-              {...(m.isPersisted ? { messageId: m.id } : {})}
-              {...(onReact ? { onReact } : {})}
-            />
-          ))}
+          {displayMessages.map((m) => {
+            const isLastAssistant =
+              m.isPersisted &&
+              m.kind === 'assistant' &&
+              m.id === lastAssistantPersistedId;
+            return (
+              <Message
+                key={m.id}
+                role={m.kind}
+                content={m.content}
+                createdAt={m.createdAt}
+                source={m.source}
+                streaming={m.streaming}
+                thinking={m.thinking}
+                error={m.error}
+                reaction={m.reaction}
+                pinned={m.pinned}
+                {...(m.isPersisted ? { messageId: m.id } : {})}
+                {...(onReact ? { onReact } : {})}
+                {...(onTogglePin ? { onTogglePin } : {})}
+                canRegenerate={
+                  isLastAssistant && !state.streaming && !!lastUserText && !!onRegenerate
+                }
+                onRegenerate={
+                  onRegenerate && lastUserText
+                    ? () => onRegenerate(lastUserText)
+                    : undefined
+                }
+              />
+            );
+          })}
         </div>
 
         <Composer

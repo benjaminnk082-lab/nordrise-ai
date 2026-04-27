@@ -59,7 +59,8 @@ type Action =
   | { type: 'error'; message: string }
   | { type: 'reset-drafts' }
   | { type: 'clear-error' }
-  | { type: 'set-reaction'; messageId: string; value: 'up' | 'down' | null };
+  | { type: 'set-reaction'; messageId: string; value: 'up' | 'down' | null }
+  | { type: 'set-pinned'; messageId: string; pinned: boolean };
 
 function threadReducer(state: ThreadState, action: Action): ThreadState {
   switch (action.type) {
@@ -161,6 +162,14 @@ function threadReducer(state: ThreadState, action: Action): ThreadState {
         ),
       };
 
+    case 'set-pinned':
+      return {
+        ...state,
+        serverMessages: state.serverMessages.map((m) =>
+          m.id === action.messageId ? { ...m, pinned: action.pinned } : m,
+        ),
+      };
+
     default:
       return state;
   }
@@ -201,6 +210,11 @@ export function useThreadState() {
       dispatch({ type: 'set-reaction', messageId, value }),
     [],
   );
+  const setPinnedLocal = useCallback(
+    (messageId: string, pinned: boolean) =>
+      dispatch({ type: 'set-pinned', messageId, pinned }),
+    [],
+  );
 
   return {
     state,
@@ -214,5 +228,6 @@ export function useThreadState() {
     resetDrafts,
     clearError,
     setReactionLocal,
+    setPinnedLocal,
   };
 }

@@ -46,8 +46,16 @@ export interface AppSettings {
    * to true for new installs.
    */
   allPermissionsAuto: boolean;
-  theme: 'dark';
+  /**
+   * UI theme preset. The layout reads this on mount and applies it via
+   * `data-theme` on <html>. CSS variables in globals.css swap accordingly.
+   */
+  theme: ThemeId;
+  /** Window opacity (0.7 .. 1.0). Applied via Electron's setOpacity in main. */
+  windowOpacity: number;
 }
+
+export type ThemeId = 'dark' | 'light' | 'solar' | 'cyberpunk' | 'compact';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   defaultModel: 'auto',
@@ -75,6 +83,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   allPermissionsAuto: true,
   theme: 'dark',
+  windowOpacity: 1.0,
 };
 
 export interface OllamaDetectResult {

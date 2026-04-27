@@ -9,6 +9,11 @@ import type {
   RoutineTemplate,
   SuggestionSummary,
   SuggestionGenerateResult,
+  PinnedMessage,
+  VaultSearchMatch,
+  ProactiveAttemptRow,
+  AppImprovementRow,
+  AppImprovementScanResult,
 } from '../../src/server-types';
 
 interface IpcFetchInit {
@@ -22,7 +27,7 @@ interface IpcFetchResponse<T> {
   body: T;
 }
 
-async function ipcFetch<T>(path: string, init: IpcFetchInit = {}): Promise<T> {
+export async function ipcFetch<T>(path: string, init: IpcFetchInit = {}): Promise<T> {
   const r = await window.nordrise.invoke<IpcFetchResponse<unknown>>('control:fetch', {
     path,
     method: init.method,
@@ -171,6 +176,75 @@ export async function clearReaction(messageId: string): Promise<void> {
     method: 'DELETE',
   });
 }
+
+// ---------- Pinned messages ----------
+
+/**
+ * Toggle the pinned state on a message. Server reads current value, flips
+ * it, returns the new value. Renderer should optimistic-update before
+ * awaiting; failures roll back via a refetch.
+ */
+export async function togglePin(
+  messageId: string,
+): Promise<{ ok: boolean; pinned: boolean }> {
+  return ipcFetch<{ ok: boolean; pinned: boolean }>(
+    `/control/messages/${messageId}/pin`,
+    { method: 'POST', body: {} },
+  );
+}
+
+export async function listPinned(): Promise<PinnedMessage[]> {
+  const r = await ipcFetch<{ pinned: PinnedMessage[] }>('/control/messages/pinned');
+  return r.pinned;
+}
+
+// ---------- Vault search (used by Ctrl+F global search) ----------
+
+export async function vaultSearch(query: string): Promise<VaultSearchMatch[]> {
+  const r = await ipcFetch<{ matches: VaultSearchMatch[] }>(
+    `/control/vault/search?q=${encodeURIComponent(query)}`,
+  );
+  return r.matches;
+}
+
+// ---------- Audit log feed (Settings → Aktivitet) ----------
+
+export async function listProactiveAttempts(): Promise<ProactiveAttemptRow[]> {
+  const r = await ipcFetch<{ attempts: ProactiveAttemptRow[] }>(
+    '/control/proactive/attempts',
+  );
+  return r.attempts;
+}
+
+// ---------- App-improvements (Sean's self-improvement queue) ----------
+
+export const appImprovementsApi = {
+  list: async (): Promise<AppImprovementRow[]> => {
+    const r = await ipcFetch<{ improvements: AppImprovementRow[] }>(
+      '/control/app-improvements',
+    );
+    return r.improvements;
+  },
+  scanNow: () =>
+    ipcFetch<AppImprovementScanResult>(
+      '/control/app-improvements/scan-now',
+      { method: 'POST', body: {} },
+    ),
+  approve: (id: string) =>
+    ipcFetch<AppImprovementRow>(`/control/app-improvements/${id}/approve`, {
+      method: 'POST',
+      body: {},
+    }),
+  reject: (id: string) =>
+    ipcFetch<AppImprovementRow>(`/control/app-improvements/${id}/reject`, {
+      method: 'POST',
+      body: {},
+    }),
+  delete: (id: string) =>
+    ipcFetch<{ ok: boolean }>(`/control/app-improvements/${id}`, {
+      method: 'DELETE',
+    }),
+};
 
 // ---------- Per-thread system prompt ----------
 

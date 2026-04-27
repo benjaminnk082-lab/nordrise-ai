@@ -136,6 +136,50 @@ export function makeVaultRouter(deps: VaultRouterDeps): Router {
     res.json({ files });
   });
 
+  // Search vault contents — used by the desktop's Ctrl+F global-search
+  // modal. Walks the vault, returns up to 50 matches where filename or
+  // file content (case-insensitive) contains the query. Cheap enough at
+  // current volumes (the vault is < 5MB on Benjamin's box) that we don't
+  // need an index. Capped to skip files > 1MB so a stray binary won't tank
+  // the response.
+  r.get('/vault/search', auth, async (req, res) => {
+    const q = String(req.query.q ?? '').trim().toLowerCase();
+    if (q.length < 2) {
+      res.json({ matches: [] });
+      return;
+    }
+    const files = await walk(deps.vaultDir, deps.vaultDir);
+    const matches: { path: string; preview: string; mtime: number }[] = [];
+    for (const f of files) {
+      if (matches.length >= 50) break;
+      const lowerName = f.path.toLowerCase();
+      let preview = '';
+      let hit = false;
+      if (lowerName.includes(q)) {
+        hit = true;
+      }
+      if (f.size <= 1_000_000) {
+        try {
+          const buf = await readFile(join(deps.vaultDir, f.path), 'utf8');
+          const lower = buf.toLowerCase();
+          const idx = lower.indexOf(q);
+          if (idx >= 0) {
+            hit = true;
+            const start = Math.max(0, idx - 40);
+            const end = Math.min(buf.length, idx + q.length + 80);
+            preview = (start > 0 ? '…' : '') + buf.slice(start, end).replace(/\s+/g, ' ').trim() + (end < buf.length ? '…' : '');
+          }
+        } catch {
+          // Skip unreadable files — race with sync etc.
+        }
+      }
+      if (hit) {
+        matches.push({ path: f.path, preview, mtime: f.mtime });
+      }
+    }
+    res.json({ matches });
+  });
+
   // Upload (or overwrite) a single file at relative path.
   // Multipart: field 'file' = bytes, field 'path' = relative path.
   r.post('/vault/files', auth, upload.single('file'), async (req, res) => {

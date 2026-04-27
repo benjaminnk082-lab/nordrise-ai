@@ -77,6 +77,36 @@ export interface ControlMessageRow {
    * assistant messages — clients should ignore reactions on user messages.
    */
   reaction: ReactionValue | null;
+  /**
+   * True iff the user has pinned this message via the star icon. Surfaced
+   * in the Pinet side panel + global-search modal.
+   */
+  pinned: boolean;
+  /**
+   * Owning controlSession (for desktop messages) or null (for telegram).
+   * Surfaced so the global-search modal can navigate the user to the right
+   * thread on click.
+   */
+  controlSessionId: string | null;
+}
+
+export interface PinnedMessage {
+  id: string;
+  controlSessionId: string | null;
+  sessionTitle: string | null;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  createdAt: string;
+}
+
+export interface VaultSearchMatch {
+  path: string;
+  preview: string;
+  mtime: number;
+}
+
+export interface VaultSearchResponse {
+  matches: VaultSearchMatch[];
 }
 
 export type RoutineChannel = 'desktop' | 'telegram' | 'both';

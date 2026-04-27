@@ -95,7 +95,17 @@ export interface AppSettings {
    * Defaults to true for new installs (Sean is autonomous out of the box).
    */
   allPermissionsAuto: boolean;
-  theme: 'dark';
+  /**
+   * UI theme preset. Applied via `data-theme` on the <html> element so CSS
+   * variables can swap colors. `compact` reuses dark colors but tightens
+   * structural padding/sizing.
+   */
+  theme: 'dark' | 'light' | 'solar' | 'cyberpunk' | 'compact';
+  /**
+   * Window opacity (0.7-1.0). Applied via Electron's BrowserWindow.setOpacity()
+   * — purely cosmetic. Outside the range is clamped on apply.
+   */
+  windowOpacity: number;
 }
 
 function defaultVaultPath(): string {
@@ -135,6 +145,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   allPermissionsAuto: true,
   theme: 'dark',
+  windowOpacity: 1.0,
 };
 
 let cached: AppSettings | null = null;

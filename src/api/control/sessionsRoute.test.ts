@@ -217,4 +217,78 @@ describe('control sessions + history', () => {
       .send({ value: 'up' });
     expect(res.status).toBe(404);
   });
+
+  it('POST /messages/:id/pin toggles, GET /messages/pinned lists', async () => {
+    const session = await prisma.controlSession.create({ data: { title: 'Pinning' } });
+    const a = await prisma.message.create({
+      data: { controlSessionId: session.id, role: 'user', content: 'hei' },
+    });
+    const b = await prisma.message.create({
+      data: { controlSessionId: session.id, role: 'assistant', content: 'svar' },
+    });
+
+    // Initial state: not pinned
+    let row = await prisma.message.findUnique({ where: { id: a.id } });
+    expect(row?.pinned).toBe(false);
+
+    // First toggle pins
+    let res = await request(app())
+      .post(`/control/messages/${a.id}/pin`)
+      .set('Authorization', 'Bearer t1')
+      .send({});
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, pinned: true });
+
+    // Second toggle unpins
+    res = await request(app())
+      .post(`/control/messages/${a.id}/pin`)
+      .set('Authorization', 'Bearer t1')
+      .send({});
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, pinned: false });
+
+    // Pin both, verify list includes them with sessionTitle
+    await request(app())
+      .post(`/control/messages/${a.id}/pin`)
+      .set('Authorization', 'Bearer t1')
+      .send({});
+    await request(app())
+      .post(`/control/messages/${b.id}/pin`)
+      .set('Authorization', 'Bearer t1')
+      .send({});
+
+    const list = await request(app())
+      .get('/control/messages/pinned')
+      .set('Authorization', 'Bearer t1');
+    expect(list.status).toBe(200);
+    expect(list.body.pinned).toHaveLength(2);
+    expect(list.body.pinned.every((p: any) => p.sessionTitle === 'Pinning')).toBe(true);
+  });
+
+  it('POST /messages/:id/pin on missing message returns 404', async () => {
+    const res = await request(app())
+      .post('/control/messages/missing-id/pin')
+      .set('Authorization', 'Bearer t1')
+      .send({});
+    expect(res.status).toBe(404);
+  });
+
+  it('GET /sessions/:id/messages includes pinned and controlSessionId', async () => {
+    const session = await prisma.controlSession.create({ data: { title: 'P' } });
+    const m = await prisma.message.create({
+      data: {
+        controlSessionId: session.id,
+        role: 'assistant',
+        content: 'hei',
+        pinned: true,
+      },
+    });
+    const res = await request(app())
+      .get(`/control/sessions/${session.id}/messages`)
+      .set('Authorization', 'Bearer t1');
+    expect(res.status).toBe(200);
+    expect(res.body.messages[0].pinned).toBe(true);
+    expect(res.body.messages[0].controlSessionId).toBe(session.id);
+    expect(res.body.messages[0].id).toBe(m.id);
+  });
 });
