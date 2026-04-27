@@ -273,6 +273,67 @@ describe('control sessions + history', () => {
     expect(res.status).toBe(404);
   });
 
+  it('GET /control/calibration buckets reactions by confidence tag', async () => {
+    const session = await prisma.controlSession.create({ data: { title: 'Cal' } });
+    // certain (no marker) — up
+    const m1 = await prisma.message.create({
+      data: {
+        controlSessionId: session.id,
+        role: 'assistant',
+        content: 'Railway bruker us-west2.',
+      },
+    });
+    await prisma.reaction.create({ data: { messageId: m1.id, value: 'up' } });
+    // certain — down
+    const m2 = await prisma.message.create({
+      data: {
+        controlSessionId: session.id,
+        role: 'assistant',
+        content: 'Norge er i Skandinavia.',
+      },
+    });
+    await prisma.reaction.create({ data: { messageId: m2.id, value: 'down' } });
+    // likely [~] — up
+    const m3 = await prisma.message.create({
+      data: {
+        controlSessionId: session.id,
+        role: 'assistant',
+        content: 'Bundle er rundt 120MB. [~]',
+      },
+    });
+    await prisma.reaction.create({ data: { messageId: m3.id, value: 'up' } });
+    // uncertain [?] — down
+    const m4 = await prisma.message.create({
+      data: {
+        controlSessionId: session.id,
+        role: 'assistant',
+        content: 'Kanskje Vite-relatert. [?]',
+      },
+    });
+    await prisma.reaction.create({ data: { messageId: m4.id, value: 'down' } });
+    // user message with reaction — should be ignored (role filter)
+    const u = await prisma.message.create({
+      data: { controlSessionId: session.id, role: 'user', content: 'q [?]' },
+    });
+    await prisma.reaction.create({ data: { messageId: u.id, value: 'up' } });
+
+    const res = await request(app())
+      .get('/control/calibration')
+      .set('Authorization', 'Bearer t1');
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(4);
+    expect(res.body.buckets).toEqual({
+      certain: { up: 1, down: 1 },
+      likely: { up: 1, down: 0 },
+      uncertain: { up: 0, down: 1 },
+    });
+  });
+
+  it('GET /control/calibration rejects without bearer', async () => {
+    const res = await request(app()).get('/control/calibration');
+    expect(res.status).toBe(401);
+  });
+
   it('GET /sessions/:id/messages includes pinned and controlSessionId', async () => {
     const session = await prisma.controlSession.create({ data: { title: 'P' } });
     const m = await prisma.message.create({

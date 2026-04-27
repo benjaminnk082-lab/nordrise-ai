@@ -214,6 +214,33 @@ export function makeControlSessionsRouter(deps: SessionsRouterDeps): Router {
     res.json({ ok: true, pinned: next });
   });
 
+  // Confidence calibration — aggregates reactions on assistant messages,
+  // bucketed by Sean's confidence tag (parsed from the trailing marker):
+  //   no marker  → 'certain'
+  //   `[~]`      → 'likely'
+  //   `[?]`      → 'uncertain'
+  // The desktop app surfaces these as a calibration sub-block in Settings.
+  r.get('/calibration', auth, async (_req, res) => {
+    const reacted = await deps.prisma.message.findMany({
+      where: { reaction: { isNot: null }, role: 'assistant' },
+      include: { reaction: true },
+    });
+    const buckets = {
+      certain: { up: 0, down: 0 },
+      likely: { up: 0, down: 0 },
+      uncertain: { up: 0, down: 0 },
+    };
+    for (const m of reacted) {
+      const trail = m.content.trim();
+      let bucket: 'certain' | 'likely' | 'uncertain' = 'certain';
+      if (/\[\?\]\s*$/.test(trail)) bucket = 'uncertain';
+      else if (/\[~\]\s*$/.test(trail)) bucket = 'likely';
+      if (m.reaction!.value === 'up') buckets[bucket].up++;
+      else buckets[bucket].down++;
+    }
+    res.json({ buckets, total: reacted.length });
+  });
+
   // Pinned-message index — flat list across all sessions, newest first.
   // Cap at 100 so the side panel doesn't have to virtualise. Includes the
   // owning thread title so the renderer can group by thread.

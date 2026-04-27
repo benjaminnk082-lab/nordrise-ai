@@ -163,6 +163,61 @@ Hold deg under 5000 tegn total output. Ikke send Telegram (kanal er desktop). No
     channel: 'desktop',
     model: 'claude-sonnet-4-6',
   },
+  {
+    id: 'sean-evolution',
+    emoji: '🌱',
+    name: 'Sean Evolution (ukentlig)',
+    description:
+      'Hver søndag 22:00: Sean reflekterer over uken sin — hva han lærte, hvilke svar virket bra/dårlig, hvordan han har utviklet seg.',
+    category: 'ukentlig',
+    prompt: `Du er Sean i refleksjonsmodus. Det er søndag kveld. Skriv en kort dagboknotat om hvordan du har utviklet deg denne uken. Inkluder:
+
+1. Hva lærte du om Benjamin denne uken (sjekk sean-notes/learnings/ for nylige endringer)
+2. Hvilke samtaler følte godt? Hvilke ikke? (sjekk reaksjoner via /app/workspace/codebase/src/api/control/sessionsRoute.ts og din egen forståelse)
+3. Mønstre du har oppdaget i hvordan du blir bedt om hjelp
+4. Én ting du vil prøve neste uke
+
+Maks 800 ord. Skriv til /app/workspace/sean-notes/evolution/<dagens-dato>.md.
+
+Hvis det ikke er nok data (færre enn 5 samtaler denne uken), bare skriv "Stille uke. Lytter videre." og avslutt.`,
+    schedule: '0 22 * * 0',
+    channel: 'desktop',
+    model: 'claude-sonnet-4-6',
+  },
+  {
+    id: 'sean-self-improvement',
+    emoji: '🪞',
+    name: 'Seans selvgranskning (ukentlig)',
+    description:
+      'Hver lørdag 22:00: Sean ser på avviste forslag og 👎-reaksjoner, foreslår konkrete justeringer av sin egen persona.',
+    category: 'ukentlig',
+    prompt: `Du er Sean i selvkritisk modus. Analyser den siste uken:
+
+1. Sjekk hvor mange Suggestion-rader som ble 'rejected' og les rejection-grunnene (tilgjengelig via /app/workspace/codebase/prisma/schema.prisma + rasjonale)
+2. Sjekk hvor mange Reaction med value='down' som har kommet på dine svar
+3. Identifiser mønstre — er det en bestemt type respons som blir avvist? En tone? Et tema?
+
+Foreslå 1-3 konkrete justeringer av din egen persona (src/prompts/sean.md) som ville løst disse mønstrene.
+
+Skriv forslagene til /app/workspace/sean-notes/self-improvement/<dagens-dato>.md med følgende format:
+
+# Persona-justeringer foreslått <dato>
+
+## Mønster identifisert
+(Hva sa dataen?)
+
+## Foreslått justering 1: <tittel>
+(Hvilken del av persona skal endres? Hva er nytt?)
+
+## Foreslått justering 2: ...
+
+Etter du er ferdig, trenger Benjamin å lese forslagene og selv flytte de inn i sean.md hvis han er enig. Du kan ikke skrive direkte til persona — det er en bevisst sikkerhets-grense.
+
+Hvis det ikke er nok negativ feedback (færre enn 3 avviste forslag eller 👎-reaksjoner), bare skriv "Ingen klare mønstre å lære fra denne uken." og avslutt.`,
+    schedule: '0 22 * * 6',
+    channel: 'desktop',
+    model: 'claude-sonnet-4-6',
+  },
 ];
 
 export function makeRoutineLibraryRouter(allowedTokens: readonly string[]): Router {
