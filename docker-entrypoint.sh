@@ -42,17 +42,26 @@ node --enable-source-maps ./dist/scripts/verify-auth.js
 # Non-fatal — if the network is down or rate-limited, Sean still boots; he
 # just won't have the live reference until the next 30-min pull (in
 # src/gateway.ts) or the next restart.
+#
+# GIT_TERMINAL_PROMPT=0 + GIT_ASKPASS=true: the repo is public so git should
+# never need credentials, but a misconfigured credential.helper or stale
+# checkout can cause git to block on a username prompt. These envs make git
+# fail fast instead.
+export GIT_TERMINAL_PROMPT=0
+export GIT_ASKPASS=/bin/true
 CODEBASE_DIR="${WORKSPACE_DIR:-/app/workspace}/codebase"
 GIT_REPO_URL="${NORDRISE_REPO_URL:-https://github.com/BennyK-tech/Nordrise-AI.git}"
 
 if [[ -d "$CODEBASE_DIR/.git" ]]; then
   echo "[entrypoint] pulling latest codebase into $CODEBASE_DIR"
-  git -C "$CODEBASE_DIR" fetch --depth=1 origin main || echo "[entrypoint] codebase fetch failed (non-fatal)"
-  git -C "$CODEBASE_DIR" reset --hard origin/main || echo "[entrypoint] codebase reset failed (non-fatal)"
+  # Make sure remote URL is the public HTTPS one (in case it was set with credentials previously)
+  git -C "$CODEBASE_DIR" remote set-url origin "$GIT_REPO_URL" 2>/dev/null || true
+  git -c credential.helper= -C "$CODEBASE_DIR" fetch --depth=1 origin main || echo "[entrypoint] codebase fetch failed (non-fatal)"
+  git -c credential.helper= -C "$CODEBASE_DIR" reset --hard origin/main || echo "[entrypoint] codebase reset failed (non-fatal)"
 else
   echo "[entrypoint] cloning codebase to $CODEBASE_DIR"
   rm -rf "$CODEBASE_DIR"
-  git clone --depth=1 "$GIT_REPO_URL" "$CODEBASE_DIR" || echo "[entrypoint] codebase clone failed (non-fatal)"
+  git -c credential.helper= clone --depth=1 "$GIT_REPO_URL" "$CODEBASE_DIR" || echo "[entrypoint] codebase clone failed (non-fatal)"
 fi
 
 # 6. Hand off to the app

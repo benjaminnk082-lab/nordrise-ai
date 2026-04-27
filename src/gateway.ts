@@ -242,9 +242,15 @@ async function main() {
   // a stale reference is acceptable; a crashed gateway is not.
   const codebaseDir = join(config.WORKSPACE_DIR, 'codebase');
   const codebasePullTimer = setInterval(() => {
+    // Public repo — git should NEVER need credentials. Disable interactive
+    // prompts and credential.helper so a misconfigured environment can't
+    // block on a username request.
     exec(
-      `git -C ${JSON.stringify(codebaseDir)} pull --quiet --depth=1 origin main`,
-      { timeout: 60_000 },
+      `git -c credential.helper= -C ${JSON.stringify(codebaseDir)} pull --quiet --depth=1 origin main`,
+      {
+        timeout: 60_000,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '/bin/true' },
+      },
       (err, _stdout, stderr) => {
         if (err) {
           logger.warn({ err: err.message, stderr: stderr.slice(0, 400) }, 'codebase periodic pull failed');

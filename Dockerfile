@@ -80,6 +80,9 @@ COPY --from=builder /build/dist ./dist
 COPY --from=builder /build/prisma ./prisma
 COPY --from=builder /build/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /build/node_modules/@prisma ./node_modules/@prisma
+# Sean's persona prompt — read by ClaudeBridge.loadPrompt() at runtime.
+# Without this Sean responds as generic Claude, not as Sean.
+COPY --from=builder /build/src/prompts ./src/prompts
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 

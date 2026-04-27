@@ -139,26 +139,46 @@ export class ClaudeBridge extends EventEmitter {
 
   async invoke(opts: ClaudeBridgeOptions): Promise<ClaudeBridgeResult> {
     const persona = await this.loadPrompt();
-    const args = ['-p', opts.message, '--output-format', 'stream-json', '--verbose'];
-    if (opts.sessionId) args.push('--resume', opts.sessionId);
-    if (opts.model) args.push('--model', opts.model);
-    // Compose the system-prompt argument: persona first, then any
-    // per-request fragment (per-thread override + recent-reactions
-    // feedback). Both pieces are trimmed; we drop empties so we never
-    // emit `--append-system-prompt ""`.
-    const combined = [persona, opts.extraSystemPrompt]
-      .map((s) => (typeof s === 'string' ? s.trim() : ''))
-      .filter((s) => s.length > 0)
-      .join('\n\n');
-    if (combined) args.push('--append-system-prompt', combined);
+
+    const buildArgs = (sessionId: string | null | undefined): string[] => {
+      const args = ['-p', opts.message, '--output-format', 'stream-json', '--verbose'];
+      if (sessionId) args.push('--resume', sessionId);
+      if (opts.model) args.push('--model', opts.model);
+      const combined = [persona, opts.extraSystemPrompt]
+        .map((s) => (typeof s === 'string' ? s.trim() : ''))
+        .filter((s) => s.length > 0)
+        .join('\n\n');
+      if (combined) args.push('--append-system-prompt', combined);
+      return args;
+    };
 
     const started = Date.now();
-    const child = spawn('claude', args, {
+    const child = spawn('claude', buildArgs(opts.sessionId), {
       env: { ...sanitizedEnv(), ...(opts.env ?? {}) },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    const result = await this.driveSubprocess(child, started, opts.signal);
+    let result = await this.driveSubprocess(child, started, opts.signal);
+
+    // Stale-session retry: if claude-code can't find the resumed session
+    // (e.g. Railway volume rotated, claude-code update wiped store, or the
+    // ID is from a previous container), retry once without --resume so the
+    // user gets a response in a fresh thread. The caller is responsible for
+    // updating the persisted claudeSessionId from the new result.
+    if (
+      result.isError &&
+      opts.sessionId &&
+      typeof result.errorMessage === 'string' &&
+      /No conversation found with session ID/i.test(result.errorMessage)
+    ) {
+      logger.warn({ staleSessionId: opts.sessionId }, 'stale claude session — retrying without --resume');
+      const retryStarted = Date.now();
+      const retryChild = spawn('claude', buildArgs(null), {
+        env: { ...sanitizedEnv(), ...(opts.env ?? {}) },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      result = await this.driveSubprocess(retryChild, retryStarted, opts.signal);
+    }
 
     // Self-critique pass — refine long, non-error replies through Haiku.
     if (
