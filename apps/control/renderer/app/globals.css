@@ -4587,3 +4587,22 @@ input:-webkit-autofill:focus {
   color: var(--text-muted);
   line-height: 1.4;
 }
+
+/* ============================================================
+   v0.5.2: Settings action row (OAuth / cookie capture buttons)
+   ============================================================ */
+
+.settings-action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.settings-action-row .qt-btn-primary {
+  white-space: nowrap;
+}
+.settings-action-row .settings-toast {
+  font-size: 12px;
+  color: var(--text-muted);
+}

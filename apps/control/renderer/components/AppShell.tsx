@@ -269,12 +269,26 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
       const isOllama = typeof routed === 'string' && routed.startsWith('ollama:');
       const connectorKeys = isOllama ? undefined : buildConnectorKeys(settings);
 
+      // Permission policy — Sean's backend appends a system-prompt fragment
+      // when mode != 'auto'. Skip for Ollama (no Sean involved).
+      const mode = settings.permissionMode ?? 'auto';
+      const permissionPayload =
+        !isOllama && mode !== 'auto'
+          ? {
+              permissionMode: mode,
+              ...(mode === 'custom'
+                ? { effectivePermissions: settings.permissions }
+                : {}),
+            }
+          : {};
+
       stream.start({
         controlSessionId: sessionId,
         text,
         attachments: attachments.length ? attachments : undefined,
         ...(routed ? { model: routed } : {}),
         ...(connectorKeys ? { connectorKeys } : {}),
+        ...permissionPayload,
       });
     },
     [active, send, stream, settings, ollamaAvailable],

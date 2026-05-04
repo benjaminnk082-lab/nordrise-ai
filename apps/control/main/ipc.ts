@@ -20,6 +20,8 @@ import {
   adoptSeanNote,
   dismissSeanNote,
 } from './vaultSync.js';
+import { runTeamsOAuth, type TeamsOAuthInput } from './teamsOAuth.js';
+import { captureVismaCookie, type VismaCookieInput } from './vismaCookieCapture.js';
 
 const DEFAULT_BACKEND = 'https://sean-production-d872.up.railway.app';
 const TOKEN_SLOT = 'bearer';
@@ -56,6 +58,12 @@ interface StreamStartPayload {
    * Stored only locally on the user's machine; never logged.
    */
   connectorKeys?: Record<string, string>;
+  /**
+   * v0.5.2 — permission mode + (for custom) per-action policy. Forwarded to
+   * the backend so Sean's system prompt mirrors the user's chosen mode.
+   */
+  permissionMode?: 'auto' | 'manual' | 'custom';
+  effectivePermissions?: Record<string, 'auto' | 'ask' | 'block'>;
 }
 
 interface ClaudeAuthTestResult {
@@ -240,6 +248,12 @@ export function registerIpc(): void {
             ? { connectorKeys: payload.connectorKeys }
             : {}),
           ...(claudeAuthToken ? { claudeAuthToken } : {}),
+          ...(payload.permissionMode
+            ? { permissionMode: payload.permissionMode }
+            : {}),
+          ...(payload.effectivePermissions
+            ? { effectivePermissions: payload.effectivePermissions }
+            : {}),
         }),
         signal: ac.signal,
       });
@@ -453,6 +467,23 @@ export function registerIpc(): void {
     } catch {
       return false;
     }
+  });
+
+  // Connector OAuth flows — opens a real auth window (browser for MS,
+  // embedded BrowserWindow for Visma) and returns the captured credential
+  // to the renderer. Renderer is responsible for storing it (typically by
+  // patching settings.connectors via the existing settings:set channel).
+  ipcMain.handle('teams:oauth-start', async (_e, input: TeamsOAuthInput) => {
+    if (!input || typeof input.clientId !== 'string') {
+      return { ok: false, error: 'invalid_input' };
+    }
+    return runTeamsOAuth(input);
+  });
+  ipcMain.handle('visma:capture-cookie', async (_e, input: VismaCookieInput) => {
+    if (!input || typeof input.school !== 'string') {
+      return { ok: false, error: 'invalid_input' };
+    }
+    return captureVismaCookie(input);
   });
 
   ipcMain.handle('ollama:stream-abort', (_e, streamId: string) => {

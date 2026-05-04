@@ -38,6 +38,8 @@ import {
   setClaudeAuthToken,
   clearClaudeAuthToken,
   testClaudeAuthToken,
+  startTeamsOAuth,
+  captureVismaCookie,
   type UpdateStatus,
 } from '../lib/bridge';
 import { RoutinesSection } from './RoutinesSection';
@@ -114,6 +116,10 @@ export function SettingsModal({
   const [showGithubKey, setShowGithubKey] = useState(false);
   const [showVercelKey, setShowVercelKey] = useState(false);
   const [savedToast, setSavedToast] = useState<null | 'firecrawl' | 'github' | 'vercel'>(null);
+  const [teamsOAuthBusy, setTeamsOAuthBusy] = useState(false);
+  const [teamsOAuthMsg, setTeamsOAuthMsg] = useState<string | null>(null);
+  const [vismaCaptureBusy, setVismaCaptureBusy] = useState(false);
+  const [vismaCaptureMsg, setVismaCaptureMsg] = useState<string | null>(null);
 
   const updateSettings = useCallback(
     async (patch: Partial<AppSettings>) => {
@@ -783,6 +789,54 @@ export function SettingsModal({
                   }
                 />
               </div>
+              <div className="settings-action-row">
+                <button
+                  type="button"
+                  className="qt-btn-primary"
+                  disabled={
+                    teamsOAuthBusy ||
+                    !settings.connectors.teams.enabled ||
+                    !settings.connectors.teams.clientId.trim()
+                  }
+                  onClick={async () => {
+                    setTeamsOAuthBusy(true);
+                    setTeamsOAuthMsg(null);
+                    try {
+                      const r = await startTeamsOAuth({
+                        clientId: settings.connectors.teams.clientId,
+                        tenantId: settings.connectors.teams.tenantId || 'common',
+                      });
+                      if (r.ok && r.refreshToken) {
+                        await updateSettings({
+                          connectors: {
+                            ...settings.connectors,
+                            teams: {
+                              ...settings.connectors.teams,
+                              refreshToken: r.refreshToken,
+                            },
+                          },
+                        });
+                        setTeamsOAuthMsg('✓ Logget inn — refresh token lagret');
+                      } else {
+                        setTeamsOAuthMsg(`✗ Feilet: ${r.error ?? 'ukjent'}`);
+                      }
+                    } catch (err) {
+                      setTeamsOAuthMsg(
+                        `✗ Feilet: ${(err as Error).message}`,
+                      );
+                    } finally {
+                      setTeamsOAuthBusy(false);
+                    }
+                  }}
+                >
+                  {teamsOAuthBusy
+                    ? 'Venter på Microsoft…'
+                    : 'Logg inn med Microsoft'}
+                </button>
+                {teamsOAuthMsg && (
+                  <span className="settings-toast">{teamsOAuthMsg}</span>
+                )}
+              </div>
               <button
                 type="button"
                 className="settings-help-link"
@@ -1008,6 +1062,55 @@ export function SettingsModal({
                     })
                   }
                 />
+              </div>
+              <div className="settings-action-row">
+                <button
+                  type="button"
+                  className="qt-btn-primary"
+                  disabled={
+                    vismaCaptureBusy ||
+                    !settings.connectors.visma.enabled ||
+                    !settings.connectors.visma.school.trim()
+                  }
+                  onClick={async () => {
+                    setVismaCaptureBusy(true);
+                    setVismaCaptureMsg(null);
+                    try {
+                      const r = await captureVismaCookie({
+                        school: settings.connectors.visma.school,
+                      });
+                      if (r.ok && r.cookie) {
+                        await updateSettings({
+                          connectors: {
+                            ...settings.connectors,
+                            visma: {
+                              ...settings.connectors.visma,
+                              cookie: r.cookie,
+                            },
+                          },
+                        });
+                        setVismaCaptureMsg('✓ Cookie fanget og lagret');
+                      } else {
+                        setVismaCaptureMsg(
+                          `✗ Avbrutt: ${r.error ?? 'ukjent'}`,
+                        );
+                      }
+                    } catch (err) {
+                      setVismaCaptureMsg(
+                        `✗ Feilet: ${(err as Error).message}`,
+                      );
+                    } finally {
+                      setVismaCaptureBusy(false);
+                    }
+                  }}
+                >
+                  {vismaCaptureBusy
+                    ? 'Vent — login-vindu åpent…'
+                    : 'Logg inn på Visma og fang cookie'}
+                </button>
+                {vismaCaptureMsg && (
+                  <span className="settings-toast">{vismaCaptureMsg}</span>
+                )}
               </div>
             </div>
           </section>

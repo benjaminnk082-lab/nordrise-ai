@@ -33,6 +33,8 @@ export function useStream(callbacks: UseStreamCallbacks) {
       attachments?: Array<{ fileId: string; workspacePath: string; filename: string }>;
       model?: string;
       connectorKeys?: Record<string, string>;
+      permissionMode?: 'auto' | 'manual' | 'custom';
+      effectivePermissions?: Record<string, 'auto' | 'ask' | 'block'>;
     }) => {
       if (handleRef.current) handleRef.current.abort();
       const handle = sendMessageStream({
@@ -41,6 +43,10 @@ export function useStream(callbacks: UseStreamCallbacks) {
         attachments: opts.attachments,
         ...(opts.model ? { model: opts.model } : {}),
         ...(opts.connectorKeys ? { connectorKeys: opts.connectorKeys } : {}),
+        ...(opts.permissionMode ? { permissionMode: opts.permissionMode } : {}),
+        ...(opts.effectivePermissions
+          ? { effectivePermissions: opts.effectivePermissions }
+          : {}),
         onFrame: (f: SseFrame) => {
           const cb = cbRef.current;
           switch (f.event) {

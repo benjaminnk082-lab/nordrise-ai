@@ -106,3 +106,46 @@ export async function setWindowOpacity(opacity: number): Promise<boolean> {
 export async function openPath(path: string): Promise<boolean> {
   return window.nordrise.invoke<boolean>('shell:open-path', path);
 }
+
+// ---------- Connector OAuth flows (v0.5.2) ----------
+
+export interface TeamsOAuthResult {
+  ok: boolean;
+  refreshToken?: string;
+  error?: string;
+}
+
+/**
+ * Run the Microsoft 365 / Teams OAuth flow. Opens the user's default browser
+ * to the Microsoft sign-in page; the response is captured by a one-shot
+ * localhost listener in main and the resulting refresh token is returned.
+ *
+ * The renderer is responsible for storing the refresh token in the connector
+ * settings (typically by calling settingsApi.set with the relevant patch).
+ */
+export async function startTeamsOAuth(input: {
+  clientId: string;
+  tenantId: string;
+}): Promise<TeamsOAuthResult> {
+  return window.nordrise.invoke<TeamsOAuthResult>('teams:oauth-start', input);
+}
+
+export interface VismaCookieResult {
+  ok: boolean;
+  cookie?: string;
+  error?: string;
+}
+
+/**
+ * Open the Visma InSchool sign-in page in an embedded BrowserWindow.
+ * The user signs in there; main detects the post-login state via the
+ * cookie jar and returns the captured `Cookie:` header string.
+ */
+export async function captureVismaCookie(input: {
+  school: string;
+}): Promise<VismaCookieResult> {
+  return window.nordrise.invoke<VismaCookieResult>(
+    'visma:capture-cookie',
+    input,
+  );
+}

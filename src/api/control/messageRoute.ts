@@ -16,6 +16,20 @@ const ModelEnum = z.enum([
   'claude-haiku-4-5',
 ]);
 
+const PermissionModeEnum = z.enum(['auto', 'manual', 'custom']);
+
+/**
+ * Effective per-action permissions sent only when permissionMode === 'custom'.
+ * Each value mirrors the renderer's PermissionMode union.
+ */
+const EffectivePermissionsSchema = z.object({
+  vaultWrite: z.enum(['auto', 'ask', 'block']).optional(),
+  telegramSend: z.enum(['auto', 'ask', 'block']).optional(),
+  webSearch: z.enum(['auto', 'ask', 'block']).optional(),
+  githubAccess: z.enum(['auto', 'ask', 'block']).optional(),
+  shellExec: z.enum(['auto', 'ask', 'block']).optional(),
+});
+
 const ConnectorKeysSchema = z.object({
   FIRECRAWL_API_KEY: z.string().min(1).max(512).optional(),
   GITHUB_PERSONAL_ACCESS_TOKEN: z.string().min(1).max(512).optional(),
@@ -59,6 +73,16 @@ const BodySchema = z.object({
    * the server's default token (inherited from `process.env`).
    */
   claudeAuthToken: z.string().min(20).max(500).optional(),
+  /**
+   * v0.5.2 — three-way permission mode (Claude Code-style). When set, the
+   * backend appends a system-prompt fragment that instructs Sean how strict
+   * to be about confirming actions. `manual` makes Sean ask before every
+   * mutating action; `auto` is the default (no extra confirmation); `custom`
+   * uses `effectivePermissions` for per-action granularity.
+   */
+  permissionMode: PermissionModeEnum.optional(),
+  /** Per-action permissions; only honored when `permissionMode === 'custom'`. */
+  effectivePermissions: EffectivePermissionsSchema.optional(),
 });
 
 export interface MessageRouterDeps {
@@ -78,6 +102,75 @@ export interface MessageRouterDeps {
    * returns canned keyword JSON to avoid spawning `claude`.
    */
   makeRetrievalBridge?: () => Pick<ClaudeBridge, 'invoke'>;
+}
+
+/**
+ * Build the permission-policy fragment from a request body's permissionMode
+ * and effectivePermissions. Returns `undefined` for the implicit-auto case
+ * (mode missing or 'auto') so we don't bloat every request with a no-op
+ * fragment.
+ *
+ * `manual` produces a single emphatic instruction. `custom` produces a
+ * concrete list keyed by action so Sean knows which classes need a confirm.
+ */
+export function buildPermissionFragment(
+  mode: 'auto' | 'manual' | 'custom' | undefined,
+  perAction: {
+    vaultWrite?: 'auto' | 'ask' | 'block';
+    telegramSend?: 'auto' | 'ask' | 'block';
+    webSearch?: 'auto' | 'ask' | 'block';
+    githubAccess?: 'auto' | 'ask' | 'block';
+    shellExec?: 'auto' | 'ask' | 'block';
+  } | undefined,
+): string | undefined {
+  if (!mode || mode === 'auto') return undefined;
+
+  if (mode === 'manual') {
+    return [
+      '## Permissions (manual mode)',
+      '',
+      'Brukeren har slått PÅ manuell-modus. Du må be om eksplisitt bekreftelse',
+      'FØR du utfører noen handling som muterer state — uavhengig av hva',
+      'som ellers står i denne prompten. Det inkluderer (men er ikke',
+      'begrenset til): skrive til vault/sean-notes, sende meldinger,',
+      'bygge/deploye, kjøre shell, kalle eksterne API-er som endrer data,',
+      'opprette filer, bruke connectors. Lese-handlinger (`ls`, grep, fetch',
+      'av offentlig info) går fortsatt gjennom uten å spørre.',
+      '',
+      'Format på bekreftelse: ett konkret ja/nei-spørsmål som beskriver',
+      'handlingen ("Skal jeg sende denne meldingen i Teams?"). Vent på',
+      '"ja"/"yes"/"kjør" før du fortsetter.',
+    ].join('\n');
+  }
+
+  // mode === 'custom' — emit concrete per-action policy.
+  const labels: Record<string, string> = {
+    vaultWrite: 'skrive til vault / sean-notes',
+    telegramSend: 'sende Telegram-meldinger',
+    webSearch: 'web-søk og scrape (Firecrawl/curl)',
+    githubAccess: 'GitHub-API-kall (issues, PRs, kode)',
+    shellExec: 'shell-kommandoer (Bash, npm, git ...)',
+  };
+  const lines: string[] = [];
+  for (const [key, label] of Object.entries(labels)) {
+    const v = (perAction ?? {})[key as keyof typeof labels];
+    if (!v) continue;
+    if (v === 'auto') lines.push(`- ${label}: utfør uten å spørre`);
+    if (v === 'ask') lines.push(`- ${label}: spør først, vent på bekreftelse`);
+    if (v === 'block') lines.push(`- ${label}: blokkert — ikke gjør, si til brukeren at det er av`);
+  }
+  if (lines.length === 0) return undefined;
+  return [
+    '## Permissions (custom mode)',
+    '',
+    'Brukeren har satt finkornede regler for hvilke handlinger som skal',
+    'utføres direkte vs. bekreftes. Følg listen under nøye:',
+    '',
+    ...lines,
+    '',
+    'For handlinger som ikke står i listen: bruk vanlig dømmekraft (lese-',
+    'handlinger fritt; muterende handlinger be om bekreftelse).',
+  ].join('\n');
 }
 
 /**
@@ -287,7 +380,14 @@ async function handle(req: Request, res: Response, deps: MessageRouterDeps): Pro
       logger.warn({ err: (err as Error).message }, 'retrieval crashed (continuing)');
     }
 
-    const finalExtra = [extraSystemPrompt, retrievedContext]
+    // Permission policy fragment — only emitted for 'manual'/'custom'.
+    // Auto-mode is the implicit default and produces no extra prompt.
+    const permissionFragment = buildPermissionFragment(
+      body.permissionMode,
+      body.effectivePermissions,
+    );
+
+    const finalExtra = [extraSystemPrompt, retrievedContext, permissionFragment]
       .map((s) => (typeof s === 'string' ? s.trim() : ''))
       .filter((s) => s.length > 0)
       .join('\n\n---\n\n');

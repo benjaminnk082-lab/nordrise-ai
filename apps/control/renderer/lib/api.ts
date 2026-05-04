@@ -318,6 +318,17 @@ export interface SendOpts {
    * claude-code subprocess env. Never persisted backend-side.
    */
   connectorKeys?: Record<string, string>;
+  /**
+   * v0.5.2 — permission policy from the renderer's settings. The backend
+   * appends a system-prompt fragment that tells Sean how to respect the
+   * mode (auto/manual/custom). Auto sends nothing — implicit default.
+   */
+  permissionMode?: 'auto' | 'manual' | 'custom';
+  /**
+   * Per-action permissions; only meaningful when `permissionMode === 'custom'`.
+   * Renderer reads from `settings.permissions` and passes through.
+   */
+  effectivePermissions?: Record<string, 'auto' | 'ask' | 'block'>;
   onFrame: (f: SseFrame) => void;
   onDone: () => void;
 }
@@ -358,6 +369,8 @@ export function sendMessageStream(opts: SendOpts): { abort: () => void } {
     attachments: opts.attachments,
     model: opts.model,
     connectorKeys: opts.connectorKeys,
+    permissionMode: opts.permissionMode,
+    effectivePermissions: opts.effectivePermissions,
   });
   return {
     abort: () => {
