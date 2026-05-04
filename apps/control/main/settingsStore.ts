@@ -120,13 +120,26 @@ export interface AppSettings {
   vault: VaultSettings;
   permissions: PermissionSettings;
   /**
-   * Master "auto-everything" override. When true, the renderer treats every
-   * permission type as 'auto' regardless of the per-action values stored in
-   * `permissions`. Per-action UI is rendered but disabled. Toggling this flag
-   * off restores the previously stored per-action settings — those values are
-   * never mutated when the global override flips.
+   * Three-way permission mode (Claude Code-style), introduced in v0.5.1:
    *
-   * Defaults to true for new installs (Sean is autonomous out of the box).
+   *   - 'auto'   — Sean executes every action without confirmation.
+   *                Ideal for trusted single-user setup. Default for new installs.
+   *   - 'manual' — Sean asks before every action, regardless of per-action values.
+   *                Mirrors Claude Code's "default" mode. Best for review-heavy
+   *                workflows or when you're handing the app to someone new.
+   *   - 'custom' — Per-action mode in `permissions` is honored exactly as-is.
+   *                Use this when you want fine-grained control (e.g. auto for
+   *                webSearch, ask for githubAccess, block for shellExec).
+   *
+   * `allPermissionsAuto` is preserved for backward-compat: settings.json files
+   * written by v0.5.0 or earlier set the legacy boolean; on load we migrate
+   * `true → 'auto'` and `false → 'custom'`. New writes always set both fields.
+   */
+  permissionMode: 'auto' | 'manual' | 'custom';
+  /**
+   * @deprecated v0.5.1 — use `permissionMode` instead. Kept on disk so a
+   * downgrade to v0.5.0 still reads sensible defaults. New code should never
+   * read this directly; use `effectivePermission()` or `permissionMode`.
    */
   allPermissionsAuto: boolean;
   /**
@@ -186,6 +199,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     githubAccess: 'auto',
     shellExec: 'block',
   },
+  permissionMode: 'auto',
   allPermissionsAuto: true,
   theme: 'dark',
   windowOpacity: 1.0,
@@ -210,10 +224,23 @@ function load(): AppSettings {
   try {
     const raw = readFileSync(file, 'utf8');
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
+    // Migrate v0.5.0-and-earlier files: when the new `permissionMode` field
+    // is missing, derive it from the legacy `allPermissionsAuto` boolean so
+    // the user's existing intent (autonomous vs per-action) is preserved.
+    let migratedMode: AppSettings['permissionMode'];
+    if (parsed.permissionMode) {
+      migratedMode = parsed.permissionMode;
+    } else if (parsed.allPermissionsAuto === false) {
+      migratedMode = 'custom';
+    } else {
+      migratedMode = 'auto';
+    }
     // Merge with defaults so unknown / missing fields fall back gracefully.
     cached = {
       ...DEFAULT_SETTINGS,
       ...parsed,
+      permissionMode: migratedMode,
+      allPermissionsAuto: migratedMode === 'auto',
       perThreadModel: {
         ...DEFAULT_SETTINGS.perThreadModel,
         ...(parsed.perThreadModel ?? {}),
@@ -273,9 +300,15 @@ export function getSettings(): AppSettings {
 
 export function setSettings(patch: Partial<AppSettings>): AppSettings {
   const current = load();
+  // Keep the legacy `allPermissionsAuto` mirror in sync with the new
+  // `permissionMode` whenever the latter changes, so a downgrade still
+  // reads a sensible value.
+  const modeAfter = patch.permissionMode ?? current.permissionMode;
   const next: AppSettings = {
     ...current,
     ...patch,
+    permissionMode: modeAfter,
+    allPermissionsAuto: modeAfter === 'auto',
     perThreadModel: {
       ...current.perThreadModel,
       ...(patch.perThreadModel ?? {}),

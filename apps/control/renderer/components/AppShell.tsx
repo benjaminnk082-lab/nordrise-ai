@@ -19,6 +19,7 @@ import { TelegramHistory } from './TelegramHistory';
 import { QuickTaskManager } from './QuickTaskManager';
 import { CommandPalette } from './CommandPalette';
 import { ConnectorRail, type ConnectorKey } from './ConnectorRail';
+import { PermissionModePill } from './PermissionModePill';
 import { SettingsModal } from './SettingsModal';
 import { RoutinesPill } from './RoutinesPill';
 import { SuggestionsPill } from './SuggestionsPill';
@@ -420,6 +421,14 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
     [settings.connectors],
   );
 
+  const handleChangePermissionMode = useCallback(
+    async (next: 'auto' | 'manual' | 'custom') => {
+      const updated = await settingsApi.set({ permissionMode: next });
+      setSettings(updated);
+    },
+    [],
+  );
+
   const handleNew = useCallback(async () => {
     try {
       const s = await newSession();
@@ -518,6 +527,10 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
             <span className="status-dot online" />
             Sean online
           </span>
+          <PermissionModePill
+            mode={settings.permissionMode ?? 'auto'}
+            onChange={(m) => void handleChangePermissionMode(m)}
+          />
           <SeanStatusPill />
           <span className="shell-foot-meta">
             v{version || '?'}
@@ -624,6 +637,7 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
         sessions={sessions}
         settings={settings}
         onToggleConnector={handleToggleConnector}
+        onChangePermissionMode={handleChangePermissionMode}
       />
       <QuickTaskManager
         open={managerOpen}

@@ -48,6 +48,8 @@ export interface PermissionSettings {
   shellExec: PermissionMode;
 }
 
+export type PermissionModeId = 'auto' | 'manual' | 'custom';
+
 export interface AppSettings {
   defaultModel: DefaultModelChoice;
   ollamaEnabled: boolean;
@@ -59,10 +61,13 @@ export interface AppSettings {
   vault: VaultSettings;
   permissions: PermissionSettings;
   /**
-   * Master "auto-everything" override. When true the renderer treats every
-   * permission as 'auto' regardless of the per-action stored value. Defaults
-   * to true for new installs.
+   * Three-way permission mode (Claude Code-style), v0.5.1+:
+   *   - 'auto'   — everything autonomous
+   *   - 'manual' — Sean asks before every action
+   *   - 'custom' — per-action `permissions` map is honored
    */
+  permissionMode: PermissionModeId;
+  /** @deprecated kept for backward-compat; use `permissionMode`. */
   allPermissionsAuto: boolean;
   /**
    * UI theme preset. The layout reads this on mount and applies it via
@@ -108,6 +113,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     githubAccess: 'auto',
     shellExec: 'block',
   },
+  permissionMode: 'auto',
   allPermissionsAuto: true,
   theme: 'dark',
   windowOpacity: 1.0,
@@ -186,18 +192,53 @@ export function buildConnectorKeys(
 }
 
 /**
- * Returns the EFFECTIVE permission mode for a given action, honouring the
- * `allPermissionsAuto` master override. The stored per-action value is
- * preserved untouched in `settings.permissions` so toggling the global flag
- * off reveals it again.
+ * Returns the EFFECTIVE permission mode for a given action, resolving through
+ * the three-way `permissionMode`:
+ *   - auto   → 'auto'    (Sean acts without asking)
+ *   - manual → 'ask'     (Sean confirms each action)
+ *   - custom → per-action value from `settings.permissions[key]`
+ *
+ * The per-action stored value is preserved untouched so flipping back to
+ * 'custom' restores the user's previous fine-grained policy.
  */
 export function effectivePermission(
   settings: AppSettings,
   key: keyof PermissionSettings,
 ): PermissionMode {
-  if (settings.allPermissionsAuto) return 'auto';
+  // Read permissionMode with a graceful fallback so old in-memory snapshots
+  // (from before this field existed) still resolve.
+  const mode: PermissionModeId =
+    settings.permissionMode ??
+    (settings.allPermissionsAuto ? 'auto' : 'custom');
+  if (mode === 'auto') return 'auto';
+  if (mode === 'manual') return 'ask';
   return settings.permissions[key];
 }
+
+/**
+ * Human-readable label + short description for each permission mode.
+ * Used by the settings UI, footer pill, and command palette.
+ */
+export const PERMISSION_MODE_META: Record<
+  PermissionModeId,
+  { label: string; sub: string; icon: string }
+> = {
+  auto: {
+    label: 'Auto',
+    sub: 'Sean handler uten å spørre — full tillit',
+    icon: '⚡',
+  },
+  manual: {
+    label: 'Manuell',
+    sub: 'Sean spør før hver handling',
+    icon: '🤚',
+  },
+  custom: {
+    label: 'Custom',
+    sub: 'Per-handling regler bestemmer',
+    icon: '🎚',
+  },
+};
 
 /**
  * Human-friendly short label for a model id used in the chip and dropdowns.

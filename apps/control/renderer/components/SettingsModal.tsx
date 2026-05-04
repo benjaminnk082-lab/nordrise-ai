@@ -4,9 +4,11 @@ import {
   settingsApi,
   ollamaApi,
   shellApi,
+  PERMISSION_MODE_META,
   type AppSettings,
   type DefaultModelChoice,
   type PermissionMode,
+  type PermissionModeId,
   type PermissionSettings,
   type ThemeId,
 } from '../lib/settings';
@@ -1043,9 +1045,9 @@ export function SettingsModal({
           {/* TILLATELSER */}
           <PermissionsSection
             permissions={settings.permissions}
-            allPermissionsAuto={settings.allPermissionsAuto}
-            onChangeAllAuto={(next) =>
-              void updateSettings({ allPermissionsAuto: next })
+            permissionMode={settings.permissionMode ?? 'auto'}
+            onChangeMode={(next) =>
+              void updateSettings({ permissionMode: next })
             }
             onChange={(patch) =>
               void updateSettings({
@@ -1596,68 +1598,78 @@ const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
 
 interface PermissionsSectionProps {
   permissions: PermissionSettings;
-  allPermissionsAuto: boolean;
+  permissionMode: PermissionModeId;
   onChange: (patch: Partial<PermissionSettings>) => void;
-  onChangeAllAuto: (next: boolean) => void;
+  onChangeMode: (next: PermissionModeId) => void;
 }
 
 function PermissionsSection({
   permissions,
-  allPermissionsAuto,
+  permissionMode,
   onChange,
-  onChangeAllAuto,
+  onChangeMode,
 }: PermissionsSectionProps) {
+  const isCustom = permissionMode === 'custom';
+  const pinned: PermissionMode | null =
+    permissionMode === 'auto'
+      ? 'auto'
+      : permissionMode === 'manual'
+        ? 'ask'
+        : null;
+
   return (
     <section className="settings-section">
       <h3 className="settings-section-title">Tillatelser</h3>
       <p className="settings-section-sub">
-        Hvor proaktiv Sean får være. <strong>Auto</strong> kjører
-        uten å spørre, <strong>Spør</strong> ber om bekreftelse,{' '}
-        <strong>Blokker</strong> nekter handlingen helt.
+        Hvordan Sean skal håndtere handlinger som å skrive filer, sende
+        meldinger eller endre kode. Velg én master-modus, eller bytt til
+        Custom for finkornet kontroll per handling.
       </p>
 
-      {/* Master "auto-everything" toggle. When ON, the renderer treats every
-          permission as 'auto' regardless of per-action stored values — those
-          are preserved so the user can revert by toggling this off. */}
+      {/* Three-way mode picker (Claude Code-style). Custom unlocks the
+          per-action rows below; auto/manual pin every row to a single value
+          while preserving the stored per-action config. */}
       <div
-        className={
-          'perm-master' + (allPermissionsAuto ? ' perm-master-on' : '')
-        }
+        className={`perm-mode-grid perm-mode-${permissionMode}`}
+        role="radiogroup"
+        aria-label="Permission mode"
       >
-        <div className="perm-master-text">
-          <div className="perm-master-label">
-            <span aria-hidden="true">⚡</span> Auto-modus
-            <span className="perm-master-sub-inline">
-              alle handlinger godkjennes
-            </span>
-          </div>
-          <div className="perm-master-desc">
-            {allPermissionsAuto
-              ? 'Sean trenger ikke spørre — han utfører oppgaver fritt. Per-action innstillinger nedenfor er deaktivert mens dette er på.'
-              : 'Sean spør / blokkerer i henhold til per-action innstillinger nedenfor.'}
-          </div>
-        </div>
-        <label className="perm-master-switch" aria-label="Auto-modus">
-          <input
-            type="checkbox"
-            checked={allPermissionsAuto}
-            onChange={(e) => onChangeAllAuto(e.target.checked)}
-          />
-          <span className="perm-master-track">
-            <span className="perm-master-thumb" />
-          </span>
-        </label>
+        {(['auto', 'manual', 'custom'] as const).map((mode) => {
+          const meta = PERMISSION_MODE_META[mode];
+          const active = permissionMode === mode;
+          return (
+            <button
+              key={mode}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              className={
+                'perm-mode-card' + (active ? ' perm-mode-card-active' : '')
+              }
+              onClick={() => onChangeMode(mode)}
+            >
+              <span className="perm-mode-icon" aria-hidden="true">
+                {meta.icon}
+              </span>
+              <span className="perm-mode-label">{meta.label}</span>
+              <span className="perm-mode-sub">{meta.sub}</span>
+            </button>
+          );
+        })}
       </div>
 
       <div
         className={
-          'perm-rows-wrap' + (allPermissionsAuto ? ' perm-rows-overridden' : '')
+          'perm-rows-wrap' +
+          (!isCustom ? ' perm-rows-overridden' : '')
         }
-        aria-disabled={allPermissionsAuto}
+        aria-disabled={!isCustom}
       >
-        {allPermissionsAuto && (
+        {!isCustom && (
           <div className="perm-overridden-banner">
-            Per-action innstillinger er overstyrt av Auto-modus.
+            {permissionMode === 'auto'
+              ? 'Per-action innstillinger er overstyrt av Auto-modus — alle handlinger godkjennes.'
+              : 'Per-action innstillinger er overstyrt av Manuell-modus — Sean spør før hver handling.'}
           </div>
         )}
         {PERMISSION_ROWS.map((row) => (
@@ -1672,12 +1684,8 @@ function PermissionsSection({
               aria-label={row.label}
             >
               {PERMISSION_MODES.map((m) => {
-                // When the master override is on, visually pin "auto" as
-                // active even though the stored value may differ. The stored
-                // value is preserved untouched so toggling off restores it.
-                const effective = allPermissionsAuto
-                  ? 'auto'
-                  : permissions[row.key];
+                const effective: PermissionMode =
+                  pinned ?? permissions[row.key];
                 const active = effective === m.value;
                 return (
                   <button
@@ -1685,13 +1693,13 @@ function PermissionsSection({
                     type="button"
                     role="radio"
                     aria-checked={active}
-                    disabled={allPermissionsAuto}
+                    disabled={!isCustom}
                     className={
                       'perm-segment-btn' +
                       (active ? ' perm-segment-btn-active' : '')
                     }
                     onClick={() =>
-                      !allPermissionsAuto &&
+                      isCustom &&
                       onChange({
                         [row.key]: m.value,
                       } as Partial<PermissionSettings>)

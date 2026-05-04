@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ControlSessionSummary } from '../../src/server-types';
 import type { QuickTask } from '../lib/quickTasks';
 import { qt, substituteTemplate } from '../lib/quickTasks';
-import type { AppSettings } from '../lib/settings';
+import type { AppSettings, PermissionModeId } from '../lib/settings';
+import { PERMISSION_MODE_META } from '../lib/settings';
 import { VariablePrompt } from './VariablePrompt';
 
 /**
@@ -87,6 +88,8 @@ export interface CommandPaletteProps {
     name: 'firecrawl' | 'github' | 'vercel' | 'teams' | 'itslearning' | 'visma',
     next: boolean,
   ) => void | Promise<void>;
+  /** Switch permission mode (auto/manual/custom) — patches settings. */
+  onChangePermissionMode: (next: PermissionModeId) => void | Promise<void>;
 }
 
 const CONNECTOR_META: Record<
@@ -133,6 +136,7 @@ export function CommandPalette({
   sessions,
   settings,
   onToggleConnector,
+  onChangePermissionMode,
 }: CommandPaletteProps) {
   const [tasks, setTasks] = useState<QuickTask[]>([]);
   const [query, setQuery] = useState('');
@@ -280,6 +284,26 @@ export function CommandPalette({
     return out;
   }, [settings.connectors, onToggleConnector]);
 
+  const permissionModeRows = useMemo<Row[]>(() => {
+    const current = settings.permissionMode ?? 'auto';
+    return (['auto', 'manual', 'custom'] as const)
+      .filter((m) => m !== current)
+      .map((m) => {
+        const meta = PERMISSION_MODE_META[m];
+        return {
+          kind: 'command' as const,
+          id: `perm-${m}`,
+          icon: meta.icon,
+          title: `Bytt permissions til ${meta.label}`,
+          sub: meta.sub,
+          run: () => {
+            void onChangePermissionMode(m);
+            close();
+          },
+        };
+      });
+  }, [settings.permissionMode, onChangePermissionMode]);
+
   const allRows = useMemo<Row[]>(() => {
     const threadRows: Row[] = sessions.slice(0, 50).map((s) => ({
       kind: 'thread',
@@ -301,8 +325,21 @@ export function CommandPalette({
       ...(t.variables.length > 0 ? { hint: `${t.variables.length} var` } : {}),
       task: t,
     }));
-    return [...baseCommands, ...connectorRows, ...threadRows, ...taskRows];
-  }, [baseCommands, connectorRows, sessions, tasks, onSelectThread]);
+    return [
+      ...baseCommands,
+      ...permissionModeRows,
+      ...connectorRows,
+      ...threadRows,
+      ...taskRows,
+    ];
+  }, [
+    baseCommands,
+    permissionModeRows,
+    connectorRows,
+    sessions,
+    tasks,
+    onSelectThread,
+  ]);
 
   const filtered = useMemo<Row[]>(() => {
     const q = query.trim();
