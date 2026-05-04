@@ -12,6 +12,24 @@ export interface ConnectorSettings {
   firecrawl: { enabled: boolean; apiKey: string };
   github: { enabled: boolean; token: string };
   vercel: { enabled: boolean; token: string };
+  teams: {
+    enabled: boolean;
+    refreshToken: string;
+    clientId: string;
+    tenantId: string;
+  };
+  itslearning: {
+    enabled: boolean;
+    site: string;
+    clientId: string;
+    clientSecret: string;
+    refreshToken: string;
+  };
+  visma: {
+    enabled: boolean;
+    school: string;
+    cookie: string;
+  };
 }
 
 export interface VaultSettings {
@@ -68,6 +86,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
     firecrawl: { enabled: false, apiKey: '' },
     github: { enabled: false, token: '' },
     vercel: { enabled: false, token: '' },
+    teams: { enabled: false, refreshToken: '', clientId: '', tenantId: 'common' },
+    itslearning: {
+      enabled: false,
+      site: '',
+      clientId: '',
+      clientSecret: '',
+      refreshToken: '',
+    },
+    visma: { enabled: false, school: '', cookie: '' },
   },
   vault: {
     enabled: false,
@@ -131,6 +158,29 @@ export function buildConnectorKeys(
   const vc = settings.connectors?.vercel;
   if (vc?.enabled && vc.token.trim()) {
     out.VERCEL_TOKEN = vc.token.trim();
+  }
+  const tm = settings.connectors?.teams;
+  if (tm?.enabled && tm.refreshToken.trim() && tm.clientId.trim()) {
+    out.MS365_MCP_OAUTH_REFRESH_TOKEN = tm.refreshToken.trim();
+    out.MS365_MCP_CLIENT_ID = tm.clientId.trim();
+    out.MS365_MCP_TENANT_ID = tm.tenantId.trim() || 'common';
+  }
+  const il = settings.connectors?.itslearning;
+  if (
+    il?.enabled &&
+    il.site.trim() &&
+    il.clientId.trim() &&
+    il.refreshToken.trim()
+  ) {
+    out.ITSLEARNING_SITE = il.site.trim();
+    out.ITSLEARNING_CLIENT_ID = il.clientId.trim();
+    out.ITSLEARNING_CLIENT_SECRET = il.clientSecret.trim();
+    out.ITSLEARNING_REFRESH_TOKEN = il.refreshToken.trim();
+  }
+  const vs = settings.connectors?.visma;
+  if (vs?.enabled && vs.school.trim() && vs.cookie.trim()) {
+    out.VISMA_SCHOOL = vs.school.trim();
+    out.VISMA_COOKIE = vs.cookie.trim();
   }
   return Object.keys(out).length ? out : undefined;
 }

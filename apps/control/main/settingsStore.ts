@@ -26,11 +26,45 @@ export type DefaultModelChoice = ClaudeModelId | 'auto';
 /**
  * MCP connectors. Keys live LOCAL-ONLY here on the user's PC and travel
  * ephemerally per request body to Sean. Never persisted backend-side.
+ *
+ * v0.5.0 added the school/work trio:
+ *   - teams: Microsoft 365 / Teams via MS Graph (chats, mail, calendar)
+ *   - itslearning: school LMS (assignments, grades, submissions)
+ *   - visma: Visma InSchool (timetable, absences, school messages)
+ *
+ * Teams uses a refresh token (long-lived OAuth grant). The desktop main
+ * process exchanges it for short-lived access tokens before each call —
+ * the renderer/server only ever sees the refresh token slot.
+ *
+ * Itslearning uses a per-school OAuth client (clientId + clientSecret + a
+ * tenant subdomain like "oslo.itslearning.com"). Secret stored locally only.
+ *
+ * Visma has no public API for students — we authenticate by capturing the
+ * user's session cookie via a one-time embedded login. `cookie` is the raw
+ * `JSESSIONID=...` value harvested after login. May expire; user re-logs in.
  */
 export interface ConnectorSettings {
   firecrawl: { enabled: boolean; apiKey: string };
   github: { enabled: boolean; token: string };
   vercel: { enabled: boolean; token: string };
+  teams: {
+    enabled: boolean;
+    refreshToken: string;
+    clientId: string;
+    tenantId: string;
+  };
+  itslearning: {
+    enabled: boolean;
+    site: string;
+    clientId: string;
+    clientSecret: string;
+    refreshToken: string;
+  };
+  visma: {
+    enabled: boolean;
+    school: string;
+    cookie: string;
+  };
 }
 
 /**
@@ -130,6 +164,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
     firecrawl: { enabled: false, apiKey: '' },
     github: { enabled: false, token: '' },
     vercel: { enabled: false, token: '' },
+    teams: { enabled: false, refreshToken: '', clientId: '', tenantId: 'common' },
+    itslearning: {
+      enabled: false,
+      site: '',
+      clientId: '',
+      clientSecret: '',
+      refreshToken: '',
+    },
+    visma: { enabled: false, school: '', cookie: '' },
   },
   vault: {
     enabled: false,
@@ -188,6 +231,18 @@ function load(): AppSettings {
           ...DEFAULT_SETTINGS.connectors.vercel,
           ...(parsed.connectors?.vercel ?? {}),
         },
+        teams: {
+          ...DEFAULT_SETTINGS.connectors.teams,
+          ...(parsed.connectors?.teams ?? {}),
+        },
+        itslearning: {
+          ...DEFAULT_SETTINGS.connectors.itslearning,
+          ...(parsed.connectors?.itslearning ?? {}),
+        },
+        visma: {
+          ...DEFAULT_SETTINGS.connectors.visma,
+          ...(parsed.connectors?.visma ?? {}),
+        },
       },
       vault: {
         ...DEFAULT_SETTINGS.vault,
@@ -237,6 +292,18 @@ export function setSettings(patch: Partial<AppSettings>): AppSettings {
       vercel: {
         ...current.connectors.vercel,
         ...(patch.connectors?.vercel ?? {}),
+      },
+      teams: {
+        ...current.connectors.teams,
+        ...(patch.connectors?.teams ?? {}),
+      },
+      itslearning: {
+        ...current.connectors.itslearning,
+        ...(patch.connectors?.itslearning ?? {}),
+      },
+      visma: {
+        ...current.connectors.visma,
+        ...(patch.connectors?.visma ?? {}),
       },
     },
     vault: {

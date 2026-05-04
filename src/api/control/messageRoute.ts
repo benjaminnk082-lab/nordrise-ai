@@ -20,6 +20,15 @@ const ConnectorKeysSchema = z.object({
   FIRECRAWL_API_KEY: z.string().min(1).max(512).optional(),
   GITHUB_PERSONAL_ACCESS_TOKEN: z.string().min(1).max(512).optional(),
   VERCEL_TOKEN: z.string().min(1).max(512).optional(),
+  MS365_MCP_OAUTH_REFRESH_TOKEN: z.string().min(1).max(4096).optional(),
+  MS365_MCP_CLIENT_ID: z.string().min(1).max(128).optional(),
+  MS365_MCP_TENANT_ID: z.string().min(1).max(128).optional(),
+  ITSLEARNING_SITE: z.string().min(1).max(256).optional(),
+  ITSLEARNING_CLIENT_ID: z.string().min(1).max(256).optional(),
+  ITSLEARNING_CLIENT_SECRET: z.string().min(1).max(512).optional(),
+  ITSLEARNING_REFRESH_TOKEN: z.string().min(1).max(2048).optional(),
+  VISMA_SCHOOL: z.string().min(1).max(256).optional(),
+  VISMA_COOKIE: z.string().min(1).max(4096).optional(),
 });
 
 const BodySchema = z.object({
@@ -214,6 +223,33 @@ async function handle(req: Request, res: Response, deps: MessageRouterDeps): Pro
     }
     if (body.connectorKeys?.VERCEL_TOKEN) {
       env.VERCEL_TOKEN = body.connectorKeys.VERCEL_TOKEN;
+    }
+    if (body.connectorKeys?.MS365_MCP_OAUTH_REFRESH_TOKEN) {
+      env.MS365_MCP_OAUTH_REFRESH_TOKEN = body.connectorKeys.MS365_MCP_OAUTH_REFRESH_TOKEN;
+    }
+    if (body.connectorKeys?.MS365_MCP_CLIENT_ID) {
+      env.MS365_MCP_CLIENT_ID = body.connectorKeys.MS365_MCP_CLIENT_ID;
+    }
+    if (body.connectorKeys?.MS365_MCP_TENANT_ID) {
+      env.MS365_MCP_TENANT_ID = body.connectorKeys.MS365_MCP_TENANT_ID;
+    }
+    if (body.connectorKeys?.ITSLEARNING_SITE) {
+      env.ITSLEARNING_SITE = body.connectorKeys.ITSLEARNING_SITE;
+    }
+    if (body.connectorKeys?.ITSLEARNING_CLIENT_ID) {
+      env.ITSLEARNING_CLIENT_ID = body.connectorKeys.ITSLEARNING_CLIENT_ID;
+    }
+    if (body.connectorKeys?.ITSLEARNING_CLIENT_SECRET) {
+      env.ITSLEARNING_CLIENT_SECRET = body.connectorKeys.ITSLEARNING_CLIENT_SECRET;
+    }
+    if (body.connectorKeys?.ITSLEARNING_REFRESH_TOKEN) {
+      env.ITSLEARNING_REFRESH_TOKEN = body.connectorKeys.ITSLEARNING_REFRESH_TOKEN;
+    }
+    if (body.connectorKeys?.VISMA_SCHOOL) {
+      env.VISMA_SCHOOL = body.connectorKeys.VISMA_SCHOOL;
+    }
+    if (body.connectorKeys?.VISMA_COOKIE) {
+      env.VISMA_COOKIE = body.connectorKeys.VISMA_COOKIE;
     }
     // Per-user Claude OAuth token overrides the server's default for this
     // subprocess. Spread order in the bridge ensures opts.env wins over

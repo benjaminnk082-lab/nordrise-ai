@@ -335,6 +335,39 @@ export function ChatPane({
                     Vercel
                   </span>
                 )}
+              {settings.connectors?.teams?.enabled &&
+                settings.connectors.teams.refreshToken.trim() &&
+                settings.connectors.teams.clientId.trim() && (
+                  <span
+                    className="connector-chip connector-chip-teams"
+                    title="Microsoft Teams: chat / mail / kalender via Graph"
+                  >
+                    <span aria-hidden="true">👥</span>
+                    Teams
+                  </span>
+                )}
+              {settings.connectors?.itslearning?.enabled &&
+                settings.connectors.itslearning.site.trim() &&
+                settings.connectors.itslearning.refreshToken.trim() && (
+                  <span
+                    className="connector-chip connector-chip-itslearning"
+                    title="Itslearning: oppgaver / karakterer / innleveringer"
+                  >
+                    <span aria-hidden="true">📚</span>
+                    Itslearning
+                  </span>
+                )}
+              {settings.connectors?.visma?.enabled &&
+                settings.connectors.visma.cookie.trim() &&
+                settings.connectors.visma.school.trim() && (
+                  <span
+                    className="connector-chip connector-chip-visma"
+                    title="Visma InSchool: timeplan / fravær / beskjeder"
+                  >
+                    <span aria-hidden="true">🏫</span>
+                    Visma
+                  </span>
+                )}
               {hasCustomPrompt && (
                 <span
                   className="connector-chip thread-prompt-chip"

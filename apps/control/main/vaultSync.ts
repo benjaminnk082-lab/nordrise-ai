@@ -21,7 +21,7 @@ import { getToken } from './keychain.js';
 import type { AppSettings } from './settingsStore.js';
 
 const TOKEN_SLOT = 'bearer';
-const DEFAULT_BACKEND = 'https://sean-production-4fcf.up.railway.app';
+const DEFAULT_BACKEND = 'https://sean-production-d872.up.railway.app';
 
 function backendUrl(): string {
   return process.env.NORDRISE_BACKEND_URL ?? DEFAULT_BACKEND;

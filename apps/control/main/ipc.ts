@@ -21,7 +21,7 @@ import {
   dismissSeanNote,
 } from './vaultSync.js';
 
-const DEFAULT_BACKEND = 'https://sean-production-4fcf.up.railway.app';
+const DEFAULT_BACKEND = 'https://sean-production-d872.up.railway.app';
 const TOKEN_SLOT = 'bearer';
 /** Account name used for the per-user Claude OAuth token in the OS keychain. */
 const CLAUDE_AUTH_SLOT = 'claude-oauth';

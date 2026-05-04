@@ -49,6 +49,24 @@ export interface SettingsModalProps {
   onSettingsChange: (next: AppSettings) => void;
   version: string;
   onLogout: () => void | Promise<void>;
+  /**
+   * When the modal is opened from the command palette / connector rail, the
+   * caller can ask us to scroll a specific section into view. `connectors`
+   * scrolls to the connectors block; `general` is a no-op (top of modal).
+   */
+  focusSection?: 'general' | 'connectors' | null;
+  /**
+   * Optionally also scrolls to a specific connector card inside the
+   * connectors section. Ignored unless `focusSection === 'connectors'`.
+   */
+  focusConnector?:
+    | 'firecrawl'
+    | 'github'
+    | 'vercel'
+    | 'teams'
+    | 'itslearning'
+    | 'visma'
+    | null;
 }
 
 interface OllamaProbe {
@@ -77,6 +95,8 @@ export function SettingsModal({
   onSettingsChange,
   version,
   onLogout,
+  focusSection = null,
+  focusConnector = null,
 }: SettingsModalProps) {
   const [probe, setProbe] = useState<OllamaProbe>({ status: 'idle', models: [] });
   const [usage, setUsage] = useState<UsageProbe>({ loading: false, recent: null });
@@ -113,6 +133,30 @@ export function SettingsModal({
     if (det.version !== undefined) next.version = det.version;
     setProbe(next);
   }, []);
+
+  // Scroll to a requested section / connector when the modal opens with a
+  // focus hint from the palette or rail. Runs after the next paint so the
+  // modal has been mounted and laid out.
+  useEffect(() => {
+    if (!open) return;
+    if (!focusSection) return;
+    const id = window.requestAnimationFrame(() => {
+      const target =
+        focusConnector
+          ? document.querySelector(
+              `[data-connector-key="${focusConnector}"]`,
+            )
+          : focusSection === 'connectors'
+            ? document.getElementById('settings-section-connectors')
+            : null;
+      if (target instanceof HTMLElement) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        target.classList.add('settings-flash');
+        setTimeout(() => target.classList.remove('settings-flash'), 1400);
+      }
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [open, focusSection, focusConnector]);
 
   // Initial fetch when opened.
   useEffect(() => {
@@ -327,7 +371,10 @@ export function SettingsModal({
           <div className="settings-divider" />
 
           {/* CONNECTORS — MCP-baserte verktøy som Sean kan bruke */}
-          <section className="settings-section">
+          <section
+            className="settings-section"
+            id="settings-section-connectors"
+          >
             <h3 className="settings-section-title">Connectors</h3>
             <p className="settings-section-sub">
               MCP-verktøy Sean kan bruke når du skriver til ham. Nøklene
@@ -634,36 +681,332 @@ export function SettingsModal({
               </button>
             </div>
 
-            {/* Stubs — Teams / Itslearning / Visma. UI-only, no functionality.
-                Communicates roadmap; v0.4.0 ships the real integrations. */}
-            <div className="settings-connector-card connector-disabled">
+            {/* Microsoft Teams — MS Graph (Chat / Mail / Calendar). */}
+            <div
+              className="settings-connector-card"
+              data-connector-key="teams"
+            >
               <div className="settings-connector-head">
-                <span className="settings-connector-name">👥 Microsoft Teams</span>
-                <span className="connector-coming">Kommer i v0.4.0</span>
+                <span className="settings-connector-name">
+                  👥 Microsoft Teams
+                </span>
+                <label className="settings-toggle">
+                  <input
+                    type="checkbox"
+                    checked={settings.connectors.teams.enabled}
+                    onChange={(e) =>
+                      void updateSettings({
+                        connectors: {
+                          ...settings.connectors,
+                          teams: {
+                            ...settings.connectors.teams,
+                            enabled: e.target.checked,
+                          },
+                        },
+                      })
+                    }
+                  />
+                  <span>Aktiv</span>
+                </label>
               </div>
               <p className="settings-connector-desc">
                 Lese meldinger, sende svar, planlegge møter via MS Graph.
+                Krever en Azure AD-app (registrer i portal.azure.com → App
+                registrations → ny single-tenant). Lim inn Client ID, Tenant
+                ID og en refresh-token (offline_access scope).
               </p>
+              <div
+                className={`settings-key-row ${!settings.connectors.teams.enabled ? 'settings-key-row-disabled' : ''}`}
+              >
+                <input
+                  type="text"
+                  className="settings-key-input"
+                  placeholder="Client ID (Application ID)"
+                  value={settings.connectors.teams.clientId}
+                  disabled={!settings.connectors.teams.enabled}
+                  onChange={(e) =>
+                    void updateSettings({
+                      connectors: {
+                        ...settings.connectors,
+                        teams: {
+                          ...settings.connectors.teams,
+                          clientId: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div
+                className={`settings-key-row ${!settings.connectors.teams.enabled ? 'settings-key-row-disabled' : ''}`}
+              >
+                <input
+                  type="text"
+                  className="settings-key-input"
+                  placeholder="Tenant ID (eller 'common')"
+                  value={settings.connectors.teams.tenantId}
+                  disabled={!settings.connectors.teams.enabled}
+                  onChange={(e) =>
+                    void updateSettings({
+                      connectors: {
+                        ...settings.connectors,
+                        teams: {
+                          ...settings.connectors.teams,
+                          tenantId: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div
+                className={`settings-key-row ${!settings.connectors.teams.enabled ? 'settings-key-row-disabled' : ''}`}
+              >
+                <input
+                  type="password"
+                  className="settings-key-input"
+                  placeholder="Refresh token (M.C5...)"
+                  value={settings.connectors.teams.refreshToken}
+                  disabled={!settings.connectors.teams.enabled}
+                  onChange={(e) =>
+                    void updateSettings({
+                      connectors: {
+                        ...settings.connectors,
+                        teams: {
+                          ...settings.connectors.teams,
+                          refreshToken: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
+              <button
+                type="button"
+                className="settings-help-link"
+                onClick={() =>
+                  void shellApi.openExternal(
+                    'https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app',
+                  )
+                }
+              >
+                ℹ Hjelp — registrer en Azure AD-app
+              </button>
             </div>
 
-            <div className="settings-connector-card connector-disabled">
+            {/* Itslearning — school LMS (assignments, grades). */}
+            <div
+              className="settings-connector-card"
+              data-connector-key="itslearning"
+            >
               <div className="settings-connector-head">
                 <span className="settings-connector-name">📚 Itslearning</span>
-                <span className="connector-coming">Kommer</span>
+                <label className="settings-toggle">
+                  <input
+                    type="checkbox"
+                    checked={settings.connectors.itslearning.enabled}
+                    onChange={(e) =>
+                      void updateSettings({
+                        connectors: {
+                          ...settings.connectors,
+                          itslearning: {
+                            ...settings.connectors.itslearning,
+                            enabled: e.target.checked,
+                          },
+                        },
+                      })
+                    }
+                  />
+                  <span>Aktiv</span>
+                </label>
               </div>
               <p className="settings-connector-desc">
-                Hente oppgaver, levere innleveringer, sjekke karakterer.
+                Hente oppgaver, levere innleveringer, sjekke karakterer. Krever
+                en OAuth-klient utstedt av skolen din (kontakt IT). Hvis du
+                ikke får det, kan Sean fortsatt lese åpne kurs hvis du limer
+                inn en personlig refresh-token fra dev-tools.
               </p>
+              <div
+                className={`settings-key-row ${!settings.connectors.itslearning.enabled ? 'settings-key-row-disabled' : ''}`}
+              >
+                <input
+                  type="text"
+                  className="settings-key-input"
+                  placeholder="Skole-domene (f.eks. oslo.itslearning.com)"
+                  value={settings.connectors.itslearning.site}
+                  disabled={!settings.connectors.itslearning.enabled}
+                  onChange={(e) =>
+                    void updateSettings({
+                      connectors: {
+                        ...settings.connectors,
+                        itslearning: {
+                          ...settings.connectors.itslearning,
+                          site: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div
+                className={`settings-key-row ${!settings.connectors.itslearning.enabled ? 'settings-key-row-disabled' : ''}`}
+              >
+                <input
+                  type="text"
+                  className="settings-key-input"
+                  placeholder="Client ID"
+                  value={settings.connectors.itslearning.clientId}
+                  disabled={!settings.connectors.itslearning.enabled}
+                  onChange={(e) =>
+                    void updateSettings({
+                      connectors: {
+                        ...settings.connectors,
+                        itslearning: {
+                          ...settings.connectors.itslearning,
+                          clientId: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div
+                className={`settings-key-row ${!settings.connectors.itslearning.enabled ? 'settings-key-row-disabled' : ''}`}
+              >
+                <input
+                  type="password"
+                  className="settings-key-input"
+                  placeholder="Client secret"
+                  value={settings.connectors.itslearning.clientSecret}
+                  disabled={!settings.connectors.itslearning.enabled}
+                  onChange={(e) =>
+                    void updateSettings({
+                      connectors: {
+                        ...settings.connectors,
+                        itslearning: {
+                          ...settings.connectors.itslearning,
+                          clientSecret: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div
+                className={`settings-key-row ${!settings.connectors.itslearning.enabled ? 'settings-key-row-disabled' : ''}`}
+              >
+                <input
+                  type="password"
+                  className="settings-key-input"
+                  placeholder="Refresh token"
+                  value={settings.connectors.itslearning.refreshToken}
+                  disabled={!settings.connectors.itslearning.enabled}
+                  onChange={(e) =>
+                    void updateSettings({
+                      connectors: {
+                        ...settings.connectors,
+                        itslearning: {
+                          ...settings.connectors.itslearning,
+                          refreshToken: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
+              <button
+                type="button"
+                className="settings-help-link"
+                onClick={() =>
+                  void shellApi.openExternal(
+                    'https://developer.itslearning.com/',
+                  )
+                }
+              >
+                ℹ Hjelp — Itslearning OAuth-dokumentasjon
+              </button>
             </div>
 
-            <div className="settings-connector-card connector-disabled">
+            {/* Visma InSchool — cookie-based (no public API for students). */}
+            <div
+              className="settings-connector-card"
+              data-connector-key="visma"
+            >
               <div className="settings-connector-head">
-                <span className="settings-connector-name">🏫 Visma InSchool</span>
-                <span className="connector-coming">Kommer</span>
+                <span className="settings-connector-name">
+                  🏫 Visma InSchool
+                </span>
+                <label className="settings-toggle">
+                  <input
+                    type="checkbox"
+                    checked={settings.connectors.visma.enabled}
+                    onChange={(e) =>
+                      void updateSettings({
+                        connectors: {
+                          ...settings.connectors,
+                          visma: {
+                            ...settings.connectors.visma,
+                            enabled: e.target.checked,
+                          },
+                        },
+                      })
+                    }
+                  />
+                  <span>Aktiv</span>
+                </label>
               </div>
               <p className="settings-connector-desc">
-                Timeplan, fravær, beskjeder fra skolen.
+                Timeplan, fravær, beskjeder fra skolen. Visma har ingen
+                offentlig API for elever — Sean snakker via session-cookie. Logg
+                inn på Visma InSchool i nettleseren, åpne DevTools (F12) →
+                Application → Cookies, og lim inn hele cookie-strengen
+                nedenfor (typisk &quot;JSESSIONID=...; XSRF-TOKEN=...&quot;).
+                Cookies utløper — Sean varsler når du må logge inn på nytt.
               </p>
+              <div
+                className={`settings-key-row ${!settings.connectors.visma.enabled ? 'settings-key-row-disabled' : ''}`}
+              >
+                <input
+                  type="text"
+                  className="settings-key-input"
+                  placeholder="Skole-domene (f.eks. oslo.inschool.visma.no)"
+                  value={settings.connectors.visma.school}
+                  disabled={!settings.connectors.visma.enabled}
+                  onChange={(e) =>
+                    void updateSettings({
+                      connectors: {
+                        ...settings.connectors,
+                        visma: {
+                          ...settings.connectors.visma,
+                          school: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div
+                className={`settings-key-row ${!settings.connectors.visma.enabled ? 'settings-key-row-disabled' : ''}`}
+              >
+                <input
+                  type="password"
+                  className="settings-key-input"
+                  placeholder="Cookie-streng"
+                  value={settings.connectors.visma.cookie}
+                  disabled={!settings.connectors.visma.enabled}
+                  onChange={(e) =>
+                    void updateSettings({
+                      connectors: {
+                        ...settings.connectors,
+                        visma: {
+                          ...settings.connectors.visma,
+                          cookie: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
             </div>
           </section>
 

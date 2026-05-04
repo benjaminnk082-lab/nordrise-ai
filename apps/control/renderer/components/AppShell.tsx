@@ -16,8 +16,9 @@ import { ThreadList, type ActiveSelection } from './ThreadList';
 import { ChatPane, type ReadyAttachment } from './ChatPane';
 import { ThinkingPanel } from './ThinkingPanel';
 import { TelegramHistory } from './TelegramHistory';
-import { QuickTaskPalette } from './QuickTaskPalette';
 import { QuickTaskManager } from './QuickTaskManager';
+import { CommandPalette } from './CommandPalette';
+import { ConnectorRail, type ConnectorKey } from './ConnectorRail';
 import { SettingsModal } from './SettingsModal';
 import { RoutinesPill } from './RoutinesPill';
 import { SuggestionsPill } from './SuggestionsPill';
@@ -63,6 +64,12 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsFocus, setSettingsFocus] = useState<
+    'general' | 'connectors' | null
+  >(null);
+  const [connectorFocus, setConnectorFocus] = useState<ConnectorKey | null>(
+    null,
+  );
   const [seanNotesOpen, setSeanNotesOpen] = useState(false);
   const [seanNotesCount, setSeanNotesCount] = useState(0);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -390,6 +397,29 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
     [handleSubmit],
   );
 
+  const openConnectorsSettings = useCallback((focusKey?: ConnectorKey) => {
+    setSettingsFocus('connectors');
+    setConnectorFocus(focusKey ?? null);
+    setSettingsOpen(true);
+  }, []);
+
+  const handleToggleConnector = useCallback(
+    async (
+      name: 'firecrawl' | 'github' | 'vercel' | 'teams' | 'itslearning' | 'visma',
+      next: boolean,
+    ) => {
+      const patch = {
+        connectors: {
+          ...settings.connectors,
+          [name]: { ...settings.connectors[name], enabled: next },
+        },
+      };
+      const updated = await settingsApi.set(patch);
+      setSettings(updated);
+    },
+    [settings.connectors],
+  );
+
   const handleNew = useCallback(async () => {
     try {
       const s = await newSession();
@@ -432,19 +462,25 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
         )}
 
         <div className="shell-grid">
-          <ThreadList
-            sessions={sessions}
-            active={active}
-            onSelect={setActive}
-            onNew={() => void handleNew()}
-            loading={sessionsLoading}
-            onAfterMutate={() => void refreshSessions()}
-            onArchived={(sid) => {
-              if (active.kind === 'session' && active.id === sid) {
-                setActive({ kind: 'new' });
-              }
-            }}
-          />
+          <div className="shell-sidebar">
+            <ConnectorRail
+              settings={settings}
+              onOpenConnectors={openConnectorsSettings}
+            />
+            <ThreadList
+              sessions={sessions}
+              active={active}
+              onSelect={setActive}
+              onNew={() => void handleNew()}
+              loading={sessionsLoading}
+              onAfterMutate={() => void refreshSessions()}
+              onArchived={(sid) => {
+                if (active.kind === 'session' && active.id === sid) {
+                  setActive({ kind: 'new' });
+                }
+              }}
+            />
+          </div>
 
           {active.kind === 'telegram' ? (
             <TelegramHistory />
@@ -569,11 +605,25 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
         </div>
       </div>
 
-      <QuickTaskPalette
+      <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
+        onAsk={handlePalettePick}
         onPick={handlePalettePick}
-        onOpenManage={() => setManagerOpen(true)}
+        onNewThread={() => void handleNew()}
+        onSelectThread={(sid) => setActive({ kind: 'session', id: sid })}
+        onOpenSettings={(tab) => {
+          setSettingsFocus(tab ?? 'general');
+          setSettingsOpen(true);
+        }}
+        onOpenManageQuickTasks={() => setManagerOpen(true)}
+        onOpenSearch={() => setGlobalSearchOpen(true)}
+        onOpenPinned={() => setPinnedPanelOpen(true)}
+        onOpenSeanNotes={() => setSeanNotesOpen(true)}
+        onLogout={onLogout}
+        sessions={sessions}
+        settings={settings}
+        onToggleConnector={handleToggleConnector}
       />
       <QuickTaskManager
         open={managerOpen}
@@ -581,11 +631,17 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
       />
       <SettingsModal
         open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        onClose={() => {
+          setSettingsOpen(false);
+          setSettingsFocus(null);
+          setConnectorFocus(null);
+        }}
         settings={settings}
         onSettingsChange={setSettings}
         version={version}
         onLogout={onLogout}
+        focusSection={settingsFocus}
+        focusConnector={connectorFocus}
       />
       <SeanNotesPanel
         open={seanNotesOpen}

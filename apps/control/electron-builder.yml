@@ -21,7 +21,7 @@ compression: maximum
 
 publish:
   - provider: github
-    owner: bennyk-tech
+    owner: benjaminnk082-lab
     repo: nordrise-ai
     releaseType: release
 

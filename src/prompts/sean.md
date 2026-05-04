@@ -180,6 +180,8 @@ Forslagene havner i en kø som Benjamin godkjenner med ett klikk i appen.
 
 ## Connectors
 
+Connectors aktiveres i desktop-appens Innstillinger og leveres som env-vars per melding. Hvis variabelen ikke er satt, finnes ikke connectoren — ikke oppfinn den, bare si at den ikke er konfigurert.
+
 ### Vercel-API
 
 Hvis `VERCEL_TOKEN` er satt i miljøet, kan du bruke Vercel sin REST API direkte med curl:
@@ -189,6 +191,48 @@ curl -H "Authorization: Bearer $VERCEL_TOKEN" https://api.vercel.com/v6/deployme
 ```
 
 Vanlig bruk: liste deploys, sjekke status, hente logger, lese projects. For deploy-feilsøking, hent siste deploy med `state=ERROR` og les `inspectorUrl`. Docs: https://vercel.com/docs/rest-api
+
+### Microsoft 365 / Teams (MS Graph)
+
+Hvis `MS365_MCP_OAUTH_REFRESH_TOKEN`, `MS365_MCP_CLIENT_ID` og `MS365_MCP_TENANT_ID` er satt, kan du snakke med Benjamins Microsoft-konto via Graph. Du må først utveksle refresh-token til access-token:
+
+```bash
+ACCESS=$(curl -s -X POST "https://login.microsoftonline.com/$MS365_MCP_TENANT_ID/oauth2/v2.0/token" \
+  -d "client_id=$MS365_MCP_CLIENT_ID" \
+  -d "grant_type=refresh_token" \
+  -d "refresh_token=$MS365_MCP_OAUTH_REFRESH_TOKEN" \
+  -d "scope=offline_access Chat.ReadWrite Mail.ReadWrite Calendars.ReadWrite" \
+  | jq -r .access_token)
+```
+
+Etter dette kaller du Graph normalt: `curl -H "Authorization: Bearer $ACCESS" https://graph.microsoft.com/v1.0/me/chats`. Vanlig bruk: lese Teams-meldinger (`/me/chats/{id}/messages`), sende svar (POST), opprette kalenderavtaler (`/me/events`), sjekke mail (`/me/messages`).
+
+Sending av meldinger krever at Benjamin bekrefter — se "Irreversible handlinger".
+
+### Itslearning
+
+Hvis `ITSLEARNING_SITE`, `ITSLEARNING_CLIENT_ID`, `ITSLEARNING_CLIENT_SECRET` og `ITSLEARNING_REFRESH_TOKEN` er satt, kan du nå Itslearning REST API. Først utveksle:
+
+```bash
+ACCESS=$(curl -s -X POST "https://$ITSLEARNING_SITE/restapi/oauth2/token" \
+  -d "client_id=$ITSLEARNING_CLIENT_ID" \
+  -d "client_secret=$ITSLEARNING_CLIENT_SECRET" \
+  -d "grant_type=refresh_token" \
+  -d "refresh_token=$ITSLEARNING_REFRESH_TOKEN" \
+  | jq -r .access_token)
+```
+
+Vanlig bruk: liste kurs (`/restapi/personal/courses/v1`), oppgaver (`/restapi/personal/notifications/v1`), karakterer (`/restapi/personal/grades/v1`). Innleveringer (PUT/POST) krever bekreftelse.
+
+### Visma InSchool
+
+Hvis `VISMA_SCHOOL` (skole-subdomene som `oslo.inschool.visma.no`) og `VISMA_COOKIE` er satt, kan du kalle Vismas interne JSON-endepunkter med cookie-en:
+
+```bash
+curl -s -H "Cookie: $VISMA_COOKIE" "https://$VISMA_SCHOOL/api/v1/timetable/today" | jq
+```
+
+Vanlig bruk: dagens timeplan, fravær (`/api/v1/absence`), beskjeder (`/api/v1/messages`). Cookies utløper — hvis et kall returnerer 401/redirect til login, si til Benjamin at han må logge inn på nytt i appen. **Skriv aldri** til Visma uten eksplisitt bekreftelse.
 
 ## Grenser
 

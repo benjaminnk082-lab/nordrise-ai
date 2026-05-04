@@ -100,7 +100,7 @@ app.whenReady().then(async () => {
   startSeanNotesAutoMerge(getSettings);
   setInterval(async () => {
     try {
-      const url = process.env.NORDRISE_BACKEND_URL ?? 'https://sean-production-4fcf.up.railway.app';
+      const url = process.env.NORDRISE_BACKEND_URL ?? 'https://sean-production-d872.up.railway.app';
       const r = await fetch(`${url}/healthz`);
       const body = (await r.json()) as { authMode?: string; db?: string };
       if (r.status === 200 && body.authMode === 'subscription' && body.db === 'ok') setTrayStatus('green');

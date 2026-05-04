@@ -4256,3 +4256,149 @@ input:-webkit-autofill:focus {
 .aimprov-status-approved { color: #ffd23c; }
 .aimprov-status-spec-written { color: #3fc57f; }
 .aimprov-status-rejected { color: #ff8a8a; }
+
+/* ============================================================
+   v0.5.0: Universal command palette + connector rail
+   ============================================================ */
+
+/* Sidebar wrapper that holds ConnectorRail + ThreadList in column 1 of
+   .shell-grid. ThreadList still owns its own scroll + border, but the
+   border-right moves up here so the rail and list share one divider. */
+.shell-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.shell-sidebar > .thread-rail {
+  flex: 1;
+  min-height: 0;
+}
+@media (max-width: 720px) {
+  .shell-sidebar { display: none; }
+}
+
+.cmd-palette {
+  width: min(640px, 92vw);
+  max-height: 70vh;
+}
+.cmd-palette .qt-palette-search {
+  font-size: 15px;
+  padding: 14px 18px;
+}
+.cmd-palette-sub {
+  margin-left: 8px;
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.cmd-palette .qt-palette-row {
+  padding: 10px 14px;
+  gap: 12px;
+}
+.cmd-palette .qt-palette-emoji {
+  font-size: 16px;
+  width: 22px;
+  text-align: center;
+}
+
+/* ---------- Connector rail (top of sidebar) ---------- */
+
+.connector-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px 6px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.025),
+    transparent
+  );
+}
+.connector-rail-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease,
+    opacity 140ms ease;
+}
+.connector-rail-pill:hover {
+  transform: translateY(-1px);
+  border-color: rgba(124, 92, 255, 0.45);
+}
+.connector-rail-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+.connector-rail-label {
+  letter-spacing: 0.01em;
+}
+.connector-rail-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: 0 0 8px;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.04);
+}
+.connector-rail-ready .connector-rail-dot {
+  background: #3fc57f;
+  box-shadow: 0 0 8px rgba(63, 197, 127, 0.55);
+}
+.connector-rail-ready {
+  border-color: rgba(63, 197, 127, 0.32);
+}
+.connector-rail-missing .connector-rail-dot {
+  background: #ffaa3c;
+  box-shadow: 0 0 8px rgba(255, 170, 60, 0.45);
+}
+.connector-rail-missing {
+  border-color: rgba(255, 170, 60, 0.30);
+  color: rgba(244, 244, 247, 0.85);
+}
+.connector-rail-off {
+  opacity: 0.55;
+}
+.connector-rail-off:hover {
+  opacity: 1;
+}
+
+/* ---------- Connector chip extras for ChatPane (v0.5.0 trio) ---------- */
+
+.connector-chip-teams {
+  background: rgba(73, 128, 255, 0.1);
+  border-color: rgba(73, 128, 255, 0.30);
+  color: #97b4ff;
+}
+.connector-chip-itslearning {
+  background: rgba(255, 138, 60, 0.1);
+  border-color: rgba(255, 138, 60, 0.30);
+  color: #ffb281;
+}
+.connector-chip-visma {
+  background: rgba(63, 197, 127, 0.1);
+  border-color: rgba(63, 197, 127, 0.32);
+  color: #6fdfa1;
+}
+
+/* Brief flash highlight when scrolled-into-view from palette/rail. */
+.settings-flash {
+  animation: settings-flash 1.4s ease-out;
+}
+@keyframes settings-flash {
+  0%   { box-shadow: 0 0 0 2px rgba(124, 92, 255, 0.0); }
+  20%  { box-shadow: 0 0 0 2px rgba(124, 92, 255, 0.55); }
+  100% { box-shadow: 0 0 0 2px rgba(124, 92, 255, 0.0); }
+}
