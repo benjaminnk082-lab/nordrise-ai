@@ -45,7 +45,13 @@ export async function setup(): Promise<void> {
     port: PORT,
     persistent: true,
   });
-  await pg.initialise();
+  // embedded-postgres unconditionally invokes `initdb` from `initialise()`,
+  // which fails on a populated data dir. Skip when the cluster is already
+  // bootstrapped (PG_VERSION marks a valid PostgreSQL data dir).
+  const pgVersionMarker = join(DATA_DIR, 'PG_VERSION');
+  if (!existsSync(pgVersionMarker)) {
+    await pg.initialise();
+  }
   await pg.start();
 
   // Workers spawned by vitest (forks pool) inherit env at process spawn
