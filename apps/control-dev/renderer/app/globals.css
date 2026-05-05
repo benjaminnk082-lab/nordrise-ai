@@ -4606,3 +4606,539 @@ input:-webkit-autofill:focus {
   font-size: 12px;
   color: var(--text-muted);
 }
+
+/* ================================================================
+   ▼▼▼  DESIGN SYSTEM v2 — Claude-style warm neutrals
+   ================================================================
+   Appended block (cascade override). Keeps the existing class names
+   stable so components don't move; only refreshes tokens, surfaces,
+   typography, and adds the new titlebar/statusbar/command-palette
+   chrome. Touched surfaces:
+     - Token redef for dark + light (warm charcoal / warm off-white)
+     - Spacing + radius + shadow + motion scale
+     - Stage gradient mesh softened to a barely-there tint
+     - Titlebar (frameless, integrated pills, window controls)
+     - Sidebar slim + soft separator + active-pill thread items
+     - Chat: assistant rendered without bubble, user soft-bubble right
+     - Thinking rail soft separator + collapsed tab
+     - Statusbar at the very bottom (skeleton: model/tokens/cost)
+     - Command palette polished centered dialog
+   New class names are scoped under `.tb-*` (titlebar) / `.sb-*`
+   (statusbar) / `.wc-*` (window controls) / `.cmdk-*` (command palette)
+   so they cannot collide with existing selectors.
+   ================================================================ */
+
+/* ---------- Tokens ---------- */
+:root,
+[data-theme='dark'],
+[data-theme='compact'] {
+  /* Chrome surfaces — warm charcoal, deeper than #050509 used to be. */
+  --bg: #1c1c19;
+  --bg-elevated: #25241f;
+  --bg-sunken: #18181502;
+  --text: #f4f0e8;
+  --text-strong: #ffffff;
+  --text-muted: rgba(244, 240, 232, 0.62);
+  --text-faint: rgba(244, 240, 232, 0.38);
+  --surface: rgba(255, 248, 234, 0.04);
+  --surface-hover: rgba(255, 248, 234, 0.07);
+  --surface-active: rgba(255, 248, 234, 0.10);
+  --border: rgba(255, 248, 234, 0.08);
+  --border-strong: rgba(255, 248, 234, 0.14);
+  --separator: rgba(255, 248, 234, 0.06);
+  /* Brand purple kept; new "claude-orange" added for accents. */
+  --accent: #7c5cff;
+  --accent-hover: #9d6dff;
+  --accent-warm: #d97757;
+  --accent-warm-hover: #e08469;
+  /* Soften the gradient mesh blobs so the chrome reads warm-neutral. */
+  --blob-1: rgba(124, 92, 255, 0.45);
+  --blob-2: rgba(217, 119, 87, 0.32);
+  --blob-3: rgba(74, 138, 255, 0.22);
+}
+
+[data-theme='light'] {
+  --bg: #faf8f3;
+  --bg-elevated: #ffffff;
+  --bg-sunken: #f3f0e9;
+  --text: #1f1f1c;
+  --text-strong: #0e0e0c;
+  --text-muted: rgba(31, 31, 28, 0.62);
+  --text-faint: rgba(31, 31, 28, 0.40);
+  --surface: rgba(31, 31, 28, 0.04);
+  --surface-hover: rgba(31, 31, 28, 0.07);
+  --surface-active: rgba(31, 31, 28, 0.09);
+  --border: rgba(31, 31, 28, 0.10);
+  --border-strong: rgba(31, 31, 28, 0.16);
+  --separator: rgba(31, 31, 28, 0.07);
+  --accent: #6f4dff;
+  --accent-hover: #5b3df0;
+  --accent-warm: #c95c3a;
+  --accent-warm-hover: #b54f30;
+  --blob-1: rgba(124, 92, 255, 0.16);
+  --blob-2: rgba(217, 119, 87, 0.14);
+  --blob-3: rgba(74, 138, 255, 0.10);
+}
+
+/* Spacing, radius, motion, shadow scale — scoped tokens used by v2 chrome. */
+:root {
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-medium: 0 2px 6px rgba(0, 0, 0, 0.10), 0 12px 32px rgba(0, 0, 0, 0.18);
+  --shadow-elev: 0 8px 24px rgba(0, 0, 0, 0.18), 0 20px 60px rgba(0, 0, 0, 0.28);
+  --motion-spring: cubic-bezier(0.32, 0.72, 0.30, 1.0);
+  --motion-fast: 150ms;
+  --motion-base: 220ms;
+  --tb-height: 44px;
+  --sb-height: 28px;
+}
+
+/* Stage gradient blobs further dialed back so the chrome is the focus. */
+.blob-purple { opacity: 0.22; filter: blur(160px); }
+.blob-pink   { opacity: 0.18; filter: blur(160px); }
+.blob-blue   { opacity: 0.12; filter: blur(160px); }
+.stage::after { opacity: 0.35; }
+
+/* ---------- Frameless window outer chrome ---------- */
+.shell-frame-wrap {
+  /* Outer rounded corners on Win11 (Mica fills the radius). */
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+[data-window-state='maximized'] .shell-frame-wrap {
+  /* Maximized state on Windows clips the rounded corners off the edges
+     of the screen anyway — drop the radius so we don't show empty pixel
+     ghost borders along the maximised inner edge. */
+  border-radius: 0;
+}
+
+.shell-frame {
+  background: var(--bg);
+}
+.shell-frame::before { display: none; } /* original gradient header bar — replaced by titlebar */
+
+/* Reflow the shell layout: titlebar / grid / statusbar. The original
+   layout had .shell-grid + .shell-foot; we keep .shell-grid as-is and
+   replace .shell-foot with .sb-bar (rendered alongside .tb-bar). */
+
+/* ---------- Titlebar (.tb-*) ---------- */
+.tb-bar {
+  -webkit-app-region: drag;
+  height: var(--tb-height);
+  padding: 0 var(--space-3) 0 var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--bg);
+  border-bottom: 1px solid var(--separator);
+  position: relative;
+  z-index: 5;
+  user-select: none;
+}
+.tb-bar > * { -webkit-app-region: no-drag; }
+.tb-spacer  { flex: 1 1 auto; -webkit-app-region: drag; align-self: stretch; }
+
+.tb-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
+  -webkit-app-region: drag;
+}
+.tb-brand-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: linear-gradient(140deg, #c4b0ff 0%, #7c5cff 60%, #5b3df0 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.30), 0 0 0 1px rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+.tb-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+}
+.tb-pill {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  letter-spacing: -0.005em;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-spring),
+              color var(--motion-fast) var(--motion-spring);
+}
+.tb-pill:hover { background: var(--surface-hover); color: var(--text); }
+.tb-pill-icon  { font-size: 13px; line-height: 1; }
+.tb-pill-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-faint);
+  box-shadow: 0 0 0 0 currentColor;
+}
+.tb-pill-status-ready   .tb-pill-dot { background: #6ec48a; box-shadow: 0 0 8px rgba(110,196,138,0.55); }
+.tb-pill-status-missing .tb-pill-dot { background: #e6a663; }
+.tb-pill-status-off     .tb-pill-dot { background: rgba(255,248,234,0.20); }
+
+.tb-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tb-icon-btn {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 32px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-spring),
+              color var(--motion-fast) var(--motion-spring);
+}
+.tb-icon-btn[data-emphasis='primary'] {
+  width: auto;
+  padding: 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+.tb-icon-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.tb-icon-btn:active { background: var(--surface-active); }
+.tb-icon-btn-glyph  { font-size: 14px; line-height: 1; }
+
+/* Window controls (.wc-*). Custom Win-style traffic-row, no native frame. */
+.wc-group {
+  display: inline-flex;
+  align-items: stretch;
+  margin-left: var(--space-3);
+  height: var(--tb-height);
+}
+.wc-btn {
+  -webkit-app-region: no-drag;
+  width: 46px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-spring),
+              color var(--motion-fast) var(--motion-spring);
+}
+.wc-btn:hover { background: var(--surface-hover); color: var(--text); }
+.wc-btn-close:hover { background: #e0443e; color: #ffffff; }
+.wc-btn svg { width: 10px; height: 10px; }
+
+/* ---------- Statusbar (.sb-*) ---------- */
+.sb-bar {
+  height: var(--sb-height);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-4);
+  border-top: 1px solid var(--separator);
+  background: var(--bg);
+  font-size: 11px;
+  letter-spacing: -0.005em;
+  color: var(--text-faint);
+  position: relative;
+  z-index: 4;
+  user-select: none;
+}
+.sb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sb-item-strong { color: var(--text-muted); }
+.sb-dot {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--text-faint);
+}
+.sb-spacer { flex: 1 1 auto; }
+.sb-bar .sb-action {
+  background: transparent;
+  border: 0;
+  color: var(--text-faint);
+  font: inherit;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: background var(--motion-fast) var(--motion-spring),
+              color var(--motion-fast) var(--motion-spring);
+}
+.sb-bar .sb-action:hover { background: var(--surface-hover); color: var(--text-muted); }
+
+/* ---------- Sidebar polish ---------- */
+.shell-sidebar {
+  border-right: 1px solid var(--separator);
+  background: transparent;
+}
+.thread-rail {
+  background: transparent;
+}
+.thread-item {
+  border-radius: var(--radius-md);
+  transition: background var(--motion-fast) var(--motion-spring);
+}
+.thread-item:hover { background: var(--surface-hover); }
+.thread-item-active {
+  background: var(--surface-active) !important;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+/* Sidebar bottom presence pill. Add a soft account chip under the threads. */
+.sb-presence {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  margin-top: auto;
+  border-top: 1px solid var(--separator);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.sb-presence-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(140deg, var(--accent) 0%, var(--accent-warm) 100%);
+  color: var(--text-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  flex-shrink: 0;
+}
+.sb-presence-name { color: var(--text); font-weight: 500; }
+
+/* ---------- Chat panel polish ---------- */
+.chat-pane {
+  background: transparent;
+}
+.message-list {
+  /* Generous horizontal padding, max-width centred for readability. */
+  padding: var(--space-6) clamp(var(--space-4), 5vw, 80px);
+}
+.message-list > * {
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Streaming pulse — subtle, not a spinner. */
+@keyframes tb-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%      { opacity: 1.0; transform: scale(1.15); }
+}
+.streaming-pulse {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent-warm);
+  animation: tb-pulse 1.4s ease-in-out infinite;
+}
+
+/* ---------- Thinking rail ---------- */
+.thinking-rail {
+  border-left: 1px solid var(--separator);
+  background: transparent;
+}
+.thinking-rail-collapsed {
+  width: 12px;
+  border-left: 1px solid var(--separator);
+  position: relative;
+  cursor: pointer;
+}
+.thinking-rail-collapsed:hover { background: var(--surface-hover); }
+.thinking-rail-collapsed .thinking-toggle {
+  position: absolute;
+  top: 50%;
+  left: -10px;
+  transform: translateY(-50%);
+  width: 20px; height: 32px;
+  border-radius: 4px 0 0 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--separator);
+  border-right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+/* ---------- Composer polish ---------- */
+.composer {
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  transition: border-color var(--motion-base) var(--motion-spring),
+              box-shadow var(--motion-base) var(--motion-spring);
+}
+.composer:focus-within {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-soft);
+}
+.composer-input { font-feature-settings: 'cv11', 'ss01', 'kern'; }
+
+/* ---------- Buttons unified ---------- */
+.link-button {
+  border-radius: var(--radius-sm);
+  transition: background var(--motion-fast) var(--motion-spring),
+              color var(--motion-fast) var(--motion-spring);
+}
+.link-button:hover { background: var(--surface-hover); }
+
+/* ---------- Update banner refresh ---------- */
+.update-banner {
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* ---------- Command palette polish (.cmdk-*) ---------- */
+.cmdk-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 16vh;
+  animation: cmdk-fade var(--motion-base) var(--motion-spring);
+}
+@keyframes cmdk-fade { from { opacity: 0; } to { opacity: 1; } }
+.cmdk-dialog {
+  width: min(640px, 92vw);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-elev);
+  overflow: hidden;
+  animation: cmdk-slide var(--motion-base) var(--motion-spring);
+}
+@keyframes cmdk-slide {
+  from { opacity: 0; transform: translateY(-8px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0)    scale(1.0);   }
+}
+.cmdk-input {
+  width: 100%;
+  padding: 16px 20px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  border-bottom: 1px solid var(--separator);
+}
+.cmdk-input::placeholder { color: var(--text-faint); }
+.cmdk-list { max-height: 360px; overflow-y: auto; padding: 6px; }
+.cmdk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-spring),
+              color var(--motion-fast) var(--motion-spring);
+}
+.cmdk-row:hover, .cmdk-row[aria-selected='true'] {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.cmdk-row-glyph { font-size: 14px; line-height: 1; width: 18px; text-align: center; }
+.cmdk-row-meta  { margin-left: auto; font-size: 11px; color: var(--text-faint); }
+.cmdk-section-label {
+  padding: 12px 12px 4px;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.cmdk-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+/* ---------- Polish for the EXISTING command palette (.qt-palette / .cmd-palette).
+   The component already implements Cmd+K, fuzzy match, threads, quick-tasks,
+   connectors and ask-Sean fallback. We only refresh its surface to match
+   the v2 aesthetic — no JS change. ---------- */
+.qt-modal-backdrop {
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(4px);
+  animation: cmdk-fade var(--motion-base) var(--motion-spring);
+}
+.qt-palette,
+.cmd-palette {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-elev);
+  animation: cmdk-slide var(--motion-base) var(--motion-spring);
+}
+.qt-palette-search {
+  border-bottom: 1px solid var(--separator);
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  padding: 16px 20px;
+}
+.qt-palette-list {
+  padding: 6px;
+}
+.qt-palette-list > * {
+  border-radius: var(--radius-md);
+}
+.qt-palette-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-faint);
+}
+.qt-palette-foot {
+  border-top: 1px solid var(--separator);
+}
+

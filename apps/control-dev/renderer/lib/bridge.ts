@@ -98,6 +98,42 @@ export async function setWindowOpacity(opacity: number): Promise<boolean> {
   return window.nordrise.invoke<boolean>('window:set-opacity', opacity);
 }
 
+// ---------- Frameless window controls ----------
+
+export async function minimizeWindow(): Promise<void> {
+  await window.nordrise.invoke<void>('window:minimize');
+}
+
+export async function toggleMaximizeWindow(): Promise<boolean> {
+  return window.nordrise.invoke<boolean>('window:toggle-maximize');
+}
+
+export async function closeWindow(): Promise<void> {
+  await window.nordrise.invoke<void>('window:close');
+}
+
+export async function isMaximized(): Promise<boolean> {
+  return window.nordrise.invoke<boolean>('window:is-maximized');
+}
+
+/**
+ * Subscribe to maximize/restore/full-screen state changes. Pushes a
+ * `{ maximized, fullscreen }` payload whenever the OS-level state shifts
+ * (so the renderer can swap the maximize icon and adjust outer-radius).
+ *
+ * Returns an unsubscribe function. Call once on titlebar mount.
+ */
+export function subscribeWindowState(
+  listener: (state: { maximized: boolean; fullscreen: boolean }) => void,
+): () => void {
+  const off = window.nordrise.on('window:state', (s: unknown) => {
+    listener(s as { maximized: boolean; fullscreen: boolean });
+  });
+  // Tell main to start emitting events for this window.
+  void window.nordrise.invoke('window:subscribe-state');
+  return off;
+}
+
 /**
  * Open a local file path with the OS default app. Used to open vault
  * markdown specs in the user's preferred editor (Obsidian on dev box,

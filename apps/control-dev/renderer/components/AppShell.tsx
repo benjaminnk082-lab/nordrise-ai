@@ -18,7 +18,7 @@ import { ThinkingPanel } from './ThinkingPanel';
 import { TelegramHistory } from './TelegramHistory';
 import { QuickTaskManager } from './QuickTaskManager';
 import { CommandPalette } from './CommandPalette';
-import { ConnectorRail, type ConnectorKey } from './ConnectorRail';
+import type { ConnectorKey } from './ConnectorRail';
 import { PermissionModePill } from './PermissionModePill';
 import { SettingsModal } from './SettingsModal';
 import { RoutinesPill } from './RoutinesPill';
@@ -27,6 +27,8 @@ import { SeanNotesPanel } from './SeanNotesPanel';
 import { SeanStatusPill } from './SeanStatusPill';
 import { GlobalSearch } from './GlobalSearch';
 import { PinnedPanel } from './PinnedPanel';
+import { Titlebar } from './Titlebar';
+import { StatusBar } from './StatusBar';
 import { vaultApi } from '../lib/vault';
 import { quitAndInstall, getPendingUpdate } from '../lib/bridge';
 import {
@@ -461,9 +463,43 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
     return sessions.find((s) => s.id === active.id) ?? null;
   }, [active, sessions]);
 
+  // Theme toggle — flips between dark and light only (the other named themes
+  // remain reachable from Settings → Generelt). Persisted via settings:set so
+  // it survives restarts. We apply optimistically because ThemeApplier is
+  // listening on the same setting and will re-apply on next render anyway.
+  const handleToggleTheme = useCallback(() => {
+    const current = settings.theme ?? 'dark';
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    void settingsApi.set({ theme: next }).then(setSettings);
+  }, [settings.theme]);
+
+  // Pretty model name for the StatusBar. Uses defaultModel; per-thread
+  // override is shown via the existing chip in ChatPane, not here.
+  const modelLabel = (() => {
+    const m = settings.defaultModel ?? 'auto';
+    if (m === 'auto') return 'Auto';
+    if (m === 'claude-opus-4-7') return 'Opus 4.7';
+    if (m === 'claude-sonnet-4-6') return 'Sonnet 4.6';
+    if (m === 'claude-haiku-4-5') return 'Haiku 4.5';
+    return m;
+  })();
+
   return (
     <div className="shell-frame-wrap">
       <div className="shell-frame">
+        <Titlebar
+          settings={settings}
+          onOpenConnectors={openConnectorsSettings}
+          onNewThread={() => void handleNew()}
+          onOpenSettings={() => {
+            setSettingsFocus('general');
+            setSettingsOpen(true);
+          }}
+          onToggleTheme={handleToggleTheme}
+          themeMode={settings.theme ?? 'dark'}
+        />
+
         {updateReady && (
           <div className="update-banner" role="status">
             <div className="update-banner-text">
@@ -486,10 +522,6 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
 
         <div className="shell-grid">
           <div className="shell-sidebar">
-            <ConnectorRail
-              settings={settings}
-              onOpenConnectors={openConnectorsSettings}
-            />
             <ThreadList
               sessions={sessions}
               active={active}
@@ -503,6 +535,19 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
                 }
               }}
             />
+            <div className="sb-presence" role="contentinfo">
+              <span className="sb-presence-avatar" aria-hidden="true">B</span>
+              <span className="sb-presence-name">Benjamin</span>
+              <button
+                type="button"
+                onClick={() => void onLogout()}
+                className="link-button"
+                style={{ marginLeft: 'auto', fontSize: 11 }}
+                title="Logg ut"
+              >
+                ⏻
+              </button>
+            </div>
           </div>
 
           {active.kind === 'telegram' ? (
@@ -537,23 +582,11 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
         </div>
 
         <div className="shell-foot">
-          <span className="status-pill">
-            <span className="status-dot online" />
-            Sean online
-          </span>
           <PermissionModePill
             mode={settings.permissionMode ?? 'auto'}
             onChange={(m) => void handleChangePermissionMode(m)}
           />
           <SeanStatusPill />
-          <span className="shell-foot-meta">
-            v{version || '?'}
-            {updateReady && (
-              <span className="shell-foot-update">
-                · oppdatering {updateReady.version} klar
-              </span>
-            )}
-          </span>
           <button
             type="button"
             onClick={() => setManagerOpen(true)}
@@ -576,8 +609,8 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
                   marginLeft: 6,
                   padding: '1px 6px',
                   borderRadius: 999,
-                  background: 'linear-gradient(90deg,#ffd23c,#ffaa3c)',
-                  color: '#1a0f0a',
+                  background: 'var(--surface-active)',
+                  color: 'var(--text)',
                   fontSize: 10,
                   fontWeight: 600,
                 }}
@@ -608,8 +641,8 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
                     marginLeft: 6,
                     padding: '1px 6px',
                     borderRadius: 999,
-                    background: 'linear-gradient(90deg,#a78bff,#7c5cff)',
-                    color: '#0b0a13',
+                    background: 'var(--surface-active)',
+                    color: 'var(--text)',
                     fontSize: 10,
                     fontWeight: 600,
                   }}
@@ -619,17 +652,14 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
               )}
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="link-button"
-          >
-            Innstillinger
-          </button>
-          <button type="button" onClick={() => void onLogout()} className="link-button">
-            Logg ut
-          </button>
         </div>
+
+        <StatusBar
+          modelLabel={modelLabel}
+          tokens={null}
+          costUsd={null}
+          version={version || undefined}
+        />
       </div>
 
       <CommandPalette

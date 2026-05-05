@@ -339,6 +339,61 @@ export function registerIpc(): void {
     return true;
   });
 
+  // Frameless-window controls. The renderer drives the new titlebar's
+  // min/max/close buttons through these. Each handler resolves the
+  // sender's window so a multi-window setup (popup + main) addresses
+  // the right one. State broadcasts via `window:state` so the renderer
+  // can swap the maximize ↔ restore icon and toggle the maximized
+  // body class for outer-radius adjustments.
+  function broadcastWindowState(w: BrowserWindow): void {
+    w.webContents.send('window:state', {
+      maximized: w.isMaximized(),
+      fullscreen: w.isFullScreen(),
+    });
+  }
+  ipcMain.handle('window:minimize', (e) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    if (w) w.minimize();
+  });
+  ipcMain.handle('window:toggle-maximize', (e) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    if (!w) return false;
+    if (w.isMaximized()) w.unmaximize();
+    else w.maximize();
+    broadcastWindowState(w);
+    return w.isMaximized();
+  });
+  ipcMain.handle('window:close', (e) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    if (w) w.close();
+  });
+  ipcMain.handle('window:is-maximized', (e) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    return w ? w.isMaximized() : false;
+  });
+  // Auto-broadcast when the OS-level maximize/restore happens (drag-to-edge,
+  // double-click on titlebar, Win+Up shortcut). The renderer invokes this
+  // once on titlebar mount; main wires the per-window listeners and pushes
+  // an initial `window:state` event back so the renderer doesn't need a
+  // second round-trip.
+  //
+  // We deduplicate per-window with a WeakSet so a hot-reload doesn't double-
+  // wire the listeners and leak.
+  const subscribed = new WeakSet<BrowserWindow>();
+  ipcMain.handle('window:subscribe-state', (e) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    if (!w) return;
+    if (!subscribed.has(w)) {
+      subscribed.add(w);
+      const onChange = () => broadcastWindowState(w);
+      w.on('maximize', onChange);
+      w.on('unmaximize', onChange);
+      w.on('enter-full-screen', onChange);
+      w.on('leave-full-screen', onChange);
+    }
+    broadcastWindowState(w);
+  });
+
   // Open a local file path with the OS default app. Used by the
   // app-improvements UI to open the spec markdown in the user's vault.
   // Strict: rejects non-string / empty inputs and surfaces the result.
