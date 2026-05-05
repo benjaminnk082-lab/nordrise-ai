@@ -5466,6 +5466,58 @@ input:-webkit-autofill:focus {
   letter-spacing: -0.01em;
 }
 
+/* ---------- Settings tab nav (.settings-tabnav) ---------- */
+.settings-tabnav {
+  display: flex;
+  gap: 4px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--separator);
+  overflow-x: auto;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.settings-tabnav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  letter-spacing: -0.005em;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--motion-fast) var(--motion-spring),
+              color var(--motion-fast) var(--motion-spring);
+}
+.settings-tabnav-item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.settings-tabnav-item[aria-current='true'] {
+  background: var(--surface-active);
+  color: var(--text);
+  font-weight: 500;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.settings-tabnav-glyph { font-size: 13px; line-height: 1; }
+
+/* Hide everything that's not the active tab. The wrappers we added in
+   SettingsModal carry data-tab; the modal root carries data-active-tab.
+   Dividers (.settings-divider) have NO data-tab and are hidden in any
+   tabbed view because tabs are self-contained sections that handle
+   their own spacing. */
+.settings-modal[data-active-tab] .settings-divider { display: none; }
+.settings-modal[data-active-tab='general'] [data-tab]:not([data-tab='general']) { display: none; }
+.settings-modal[data-active-tab='connectors'] [data-tab]:not([data-tab='connectors']) { display: none; }
+.settings-modal[data-active-tab='vault'] [data-tab]:not([data-tab='vault']) { display: none; }
+.settings-modal[data-active-tab='permissions'] [data-tab]:not([data-tab='permissions']) { display: none; }
+.settings-modal[data-active-tab='auth'] [data-tab]:not([data-tab='auth']) { display: none; }
+
 /* ---------- Settings sticky tab nav (.settings-stickynav) ---------- */
 
 .settings-stickynav {

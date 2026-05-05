@@ -92,6 +92,28 @@ const MODEL_OPTIONS: { value: DefaultModelChoice; label: string; sub: string }[]
   { value: 'claude-haiku-4-5', label: 'Haiku 4.5', sub: 'Raskest, billigst' },
 ];
 
+/**
+ * Settings is split into 5 tabs. Each `<section>` (and each helper-component
+ * wrapper) gets a `data-tab="<key>"` attribute. The modal root carries
+ * `data-active-tab="<key>"`; CSS in globals.css hides non-matching elements.
+ * Dividers (`.settings-divider`) are hidden when any tab is active since
+ * tabs are self-contained sections.
+ */
+type SettingsTabKey =
+  | 'general'
+  | 'connectors'
+  | 'vault'
+  | 'permissions'
+  | 'auth';
+
+const SETTINGS_TABS: { key: SettingsTabKey; label: string; glyph: string }[] = [
+  { key: 'general', label: 'Generelt', glyph: '⚙' },
+  { key: 'connectors', label: 'Connectors', glyph: '🔌' },
+  { key: 'vault', label: 'Vault', glyph: '✦' },
+  { key: 'permissions', label: 'Tillatelser & aktivitet', glyph: '◉' },
+  { key: 'auth', label: 'Auth & system', glyph: '⏻' },
+];
+
 export function SettingsModal({
   open,
   onClose,
@@ -238,12 +260,22 @@ export function SettingsModal({
     onClose();
   }
 
+  // Tab state. Default 'general'; jump to 'connectors' when caller asks.
+  const [activeTab, setActiveTab] = useState<SettingsTabKey>('general');
+  useEffect(() => {
+    if (open) {
+      if (focusSection === 'connectors') setActiveTab('connectors');
+      else if (focusSection === 'general') setActiveTab('general');
+    }
+  }, [open, focusSection]);
+
   if (!open) return null;
 
   return (
     <div className="qt-modal-backdrop" onClick={onClose}>
       <div
         className="qt-modal settings-modal"
+        data-active-tab={activeTab}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="qt-modal-head">
@@ -258,18 +290,37 @@ export function SettingsModal({
           </button>
         </div>
 
+        <nav className="settings-tabnav" role="tablist" aria-label="Innstillingsfaner">
+          {SETTINGS_TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === t.key}
+              aria-current={activeTab === t.key ? 'true' : undefined}
+              className="settings-tabnav-item"
+              onClick={() => setActiveTab(t.key)}
+            >
+              <span className="settings-tabnav-glyph" aria-hidden="true">{t.glyph}</span>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </nav>
+
         <div className="settings-body">
           {/* VISNING — theme picker + opacity slider */}
-          <DisplaySection
-            theme={settings.theme}
-            windowOpacity={settings.windowOpacity}
-            onChangeTheme={(t) => void updateSettings({ theme: t })}
-            onChangeOpacity={(o) => void updateSettings({ windowOpacity: o })}
-          />
+          <div data-tab="general">
+            <DisplaySection
+              theme={settings.theme}
+              windowOpacity={settings.windowOpacity}
+              onChangeTheme={(t) => void updateSettings({ theme: t })}
+              onChangeOpacity={(o) => void updateSettings({ windowOpacity: o })}
+            />
+          </div>
           <div className="settings-divider" />
 
           {/* MODELL */}
-          <section className="settings-section">
+          <section className="settings-section" data-tab="general">
             <h3 className="settings-section-title">Modell</h3>
             <p className="settings-section-sub">
               Velg standard. <strong>Auto</strong> ruter enkle meldinger til
@@ -307,7 +358,7 @@ export function SettingsModal({
           <div className="settings-divider" />
 
           {/* OLLAMA */}
-          <section className="settings-section">
+          <section className="settings-section" data-tab="general">
             <h3 className="settings-section-title">Ollama (lokal)</h3>
             <label className="settings-toggle">
               <input
@@ -382,6 +433,7 @@ export function SettingsModal({
           <section
             className="settings-section"
             id="settings-section-connectors"
+            data-tab="connectors"
           >
             <h3 className="settings-section-title">Connectors</h3>
             <p className="settings-section-sub">
@@ -1118,61 +1170,75 @@ export function SettingsModal({
           <div className="settings-divider" />
 
           {/* OBSIDIAN-VAULT */}
-          <VaultSection
-            enabled={settings.vault.enabled}
-            localPath={settings.vault.localPath}
-            onChange={(patch) =>
-              void updateSettings({
-                vault: { ...settings.vault, ...patch },
-              })
-            }
-          />
+          <div data-tab="vault">
+            <VaultSection
+              enabled={settings.vault.enabled}
+              localPath={settings.vault.localPath}
+              onChange={(patch) =>
+                void updateSettings({
+                  vault: { ...settings.vault, ...patch },
+                })
+              }
+            />
+          </div>
 
           <div className="settings-divider" />
 
           {/* SEAN'S HUKOMMELSE */}
-          <MemoryStreamSection />
+          <div data-tab="vault">
+            <MemoryStreamSection />
+          </div>
 
           <div className="settings-divider" />
 
           {/* AKTIVITET — merged audit log */}
-          <AuditLogSection />
+          <div data-tab="permissions">
+            <AuditLogSection />
+          </div>
 
           <div className="settings-divider" />
 
           {/* APP-FORBEDRINGER — Sean's self-improvement queue */}
-          <AppImprovementsSection />
+          <div data-tab="permissions">
+            <AppImprovementsSection />
+          </div>
 
           <div className="settings-divider" />
 
           {/* TILLATELSER */}
-          <PermissionsSection
-            permissions={settings.permissions}
-            permissionMode={settings.permissionMode ?? 'auto'}
-            onChangeMode={(next) =>
-              void updateSettings({ permissionMode: next })
-            }
-            onChange={(patch) =>
-              void updateSettings({
-                permissions: { ...settings.permissions, ...patch },
-              })
-            }
-          />
+          <div data-tab="permissions">
+            <PermissionsSection
+              permissions={settings.permissions}
+              permissionMode={settings.permissionMode ?? 'auto'}
+              onChangeMode={(next) =>
+                void updateSettings({ permissionMode: next })
+              }
+              onChange={(patch) =>
+                void updateSettings({
+                  permissions: { ...settings.permissions, ...patch },
+                })
+              }
+            />
+          </div>
 
           <div className="settings-divider" />
 
           {/* PROAKTIV SEAN */}
-          <ProactiveSection />
+          <div data-tab="permissions">
+            <ProactiveSection />
+          </div>
 
           <div className="settings-divider" />
 
           {/* RUTINER */}
-          <RoutinesSection />
+          <div data-tab="permissions">
+            <RoutinesSection />
+          </div>
 
           <div className="settings-divider" />
 
           {/* BRUK */}
-          <section className="settings-section">
+          <section className="settings-section" data-tab="permissions">
             <h3 className="settings-section-title">Bruk siste 5 timer</h3>
             <div className="settings-usage">
               {usage.loading ? (
@@ -1193,7 +1259,7 @@ export function SettingsModal({
           <div className="settings-divider" />
 
           {/* TOKEN */}
-          <section className="settings-section">
+          <section className="settings-section" data-tab="auth">
             <h3 className="settings-section-title">Token</h3>
             <form onSubmit={saveToken} className="settings-token-form">
               <input
@@ -1238,12 +1304,14 @@ export function SettingsModal({
           <div className="settings-divider" />
 
           {/* CLAUDE-AUTH — per-user Claude OAuth token */}
-          <ClaudeAuthSection />
+          <div data-tab="auth">
+            <ClaudeAuthSection />
+          </div>
 
           <div className="settings-divider" />
 
           {/* HOTKEYS */}
-          <section className="settings-section">
+          <section className="settings-section" data-tab="auth">
             <h3 className="settings-section-title">Hurtigtaster</h3>
             <ul className="settings-hotkeys">
               <li>
@@ -1268,9 +1336,11 @@ export function SettingsModal({
           <div className="settings-divider" />
 
           {/* VERSJON / OPPDATERING */}
-          <UpdateSection version={version} />
+          <div data-tab="auth">
+            <UpdateSection version={version} />
+          </div>
           <div className="settings-divider" />
-          <section className="settings-section">
+          <section className="settings-section" data-tab="auth">
             <h3 className="settings-section-title">Reset</h3>
             <button type="button" className="qt-btn-secondary" onClick={() => void handleResetAll()}>
               Reset alle innstillinger
