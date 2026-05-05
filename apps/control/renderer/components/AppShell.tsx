@@ -32,6 +32,8 @@ import { StatusBar } from './StatusBar';
 import { HealthPill } from './HealthPill';
 import { VaultSetupCard } from './VaultSetupCard';
 import { CostsPanel } from './CostsPanel';
+import { LighthousePanel } from './LighthousePanel';
+import { PreviewPanel } from './PreviewPanel';
 import { vaultApi } from '../lib/vault';
 import { quitAndInstall, getPendingUpdate } from '../lib/bridge';
 import {
@@ -470,6 +472,8 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
   // configured (or hits the "set up vault" CTA from the status bar).
   const [vaultSetupOpen, setVaultSetupOpen] = useState(false);
   const [costsOpen, setCostsOpen] = useState(false);
+  const [lighthouseOpen, setLighthouseOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // Theme toggle — flips between dark and light only (the other named themes
   // remain reachable from Settings → Generelt). Persisted via settings:set so
@@ -643,6 +647,22 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
           >
             Costs
           </button>
+          <button
+            type="button"
+            onClick={() => setLighthouseOpen(true)}
+            className="link-button"
+            title="Lighthouse audit"
+          >
+            Lighthouse
+          </button>
+          <button
+            type="button"
+            onClick={() => setPreviewOpen((v) => !v)}
+            className="link-button"
+            title="Live preview"
+          >
+            Preview
+          </button>
           {settings.vault.enabled && (
             <button
               type="button"
@@ -785,6 +805,12 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
         }
       />
       <CostsPanel open={costsOpen} onClose={() => setCostsOpen(false)} />
+      <LighthousePanel
+        open={lighthouseOpen}
+        onClose={() => setLighthouseOpen(false)}
+        vaultRoot={settings.vault?.localPath || undefined}
+      />
+      <PreviewPanel open={previewOpen} onClose={() => setPreviewOpen(false)} />
     </div>
   );
 }

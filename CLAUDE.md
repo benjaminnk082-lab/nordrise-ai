@@ -696,6 +696,38 @@ under `<vault>/Sean/skills-registry/` is local-only — Sean cannot
 auto-fetch from the internet. Future remote registries (if any) MUST be
 explicitly trusted and signed.
 
+### Optional native deps (Phase 3.5)
+
+The desktop client ships with two features whose runtime deps aren't
+bundled (to keep the Windows installer small): Lighthouse + Playwright.
+Until installed, the modules fall back to graceful stubs that explain
+what to install.
+
+**Lighthouse audit** — `lib/lighthouseRunner.ts` dynamic-imports
+`lighthouse` and `chrome-launcher`. To enable real audits in the
+sandbox:
+
+```bash
+npm install --prefix apps/control-dev lighthouse chrome-launcher
+# Mirror to live when ready:
+npm install --prefix apps/control      lighthouse chrome-launcher
+```
+
+The runner uses the user's installed Chrome via `chrome-launcher`
+(no Puppeteer). The audit JSON dumps to `<vault>/Sean/audits/<date>-
+<host>.json` when a vault is configured.
+
+**Playwright e2e canary** — `scripts/agent-self-test.ts` canary 9
+boots the dev app via `@playwright/test` (already a `devDependency`
+of `apps/control-dev/package.json` from foundation but not installed
+on a fresh sandbox). To enable:
+
+```bash
+npm install --prefix apps/control-dev @playwright/test
+npx --prefix apps/control-dev playwright install chromium
+RUN_ELECTRON_E2E=1 npm run agent:self-test:e2e
+```
+
 ### Self-test harness (`scripts/agent-self-test.mjs`)
 
 Runs from repo root with `npm run agent:self-test`. Two modes:
