@@ -1,7 +1,7 @@
 'use client';
 import ReactMarkdownPkg from 'react-markdown';
 import rehypeHighlightPkg from 'rehype-highlight';
-import type { ComponentPropsWithoutRef } from 'react';
+import { useState, type ComponentPropsWithoutRef } from 'react';
 import type { ReactionValue } from '../../src/server-types';
 
 // react-markdown 9 ships ESM. Under Next's bundler we still need to
@@ -97,6 +97,64 @@ function formatTime(iso?: string): string {
   return d.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' });
 }
 
+/**
+ * Extract a plan from the start of an assistant reply.
+ *
+ * Recognises three shapes:
+ *   1. "**Plan:**\n1. X\n2. Y\n3. Z" — explicit header
+ *   2. "Jeg skal:\n1. X\n2. Y" — verb-of-intent header
+ *   3. The very first 2-7 lines are a numbered list (no header)
+ *
+ * Returns `null` when no plan is detected so the renderer skips the
+ * card. Anything the card consumes is stripped from the markdown body
+ * to avoid duplication.
+ */
+interface ExtractedPlan {
+  header: string;
+  items: string[];
+  rest: string;
+}
+
+function canonicalHeader(s: string): string {
+  const lower = s.toLowerCase().trim();
+  if (lower.startsWith('plan')) return 'Plan';
+  if (lower.startsWith("i'll") || lower.startsWith('i will')) return 'Plan';
+  return 'Jeg skal';
+}
+
+function extractPlan(raw: string): ExtractedPlan | null {
+  if (!raw) return null;
+  const text = raw.trimStart();
+  const headerMatch = text.match(
+    /^(?:\*\*|#+ ?)?(plan|jeg skal(?: gjøre)?|i['']?ll|i will)(?:\*\*)?:?\s*\n+/i,
+  );
+  let header: string | null = null;
+  let body = text;
+  if (headerMatch) {
+    header = canonicalHeader(headerMatch[1] ?? '');
+    body = text.slice(headerMatch[0].length);
+  }
+  const items: string[] = [];
+  const lines = body.split(/\r?\n/);
+  let consumed = 0;
+  for (const line of lines) {
+    const m = line.match(/^\s*(\d+)[.)]\s+(.+?)\s*$/);
+    if (!m) {
+      if (items.length > 0) break;
+      if (line.trim() === '' && consumed < 2) {
+        consumed += 1;
+        continue;
+      }
+      return null;
+    }
+    items.push(m[2] ?? '');
+    consumed += 1;
+  }
+  if (items.length < 2 || items.length > 8) return null;
+  const rest = lines.slice(consumed).join('\n').trimStart();
+  return { header: header ?? 'Plan', items, rest };
+}
+
 export function Message({
   role,
   content,
@@ -166,6 +224,30 @@ export function Message({
     onReact(messageId, reaction === next ? null : next);
   }
 
+  // Copy-as-markdown — copies the raw assistant content (markdown) to
+  // the clipboard and flashes a brief confirmation. Available on any
+  // completed assistant message.
+  const [copied, setCopied] = useState(false);
+  const canCopy = role === 'assistant' && !streaming && !thinking && !error && !!content;
+  async function handleCopy(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard API can fail in some Electron sandbox configs; fall
+      // through silently — user can still select text manually.
+    }
+  }
+
+  // Plan extraction — only meaningful on assistant replies that aren't
+  // streaming or errored (extracting from a half-arrived stream would
+  // re-shuffle the UI on every chunk). Falls through to null = no card.
+  const plan =
+    role === 'assistant' && !streaming && !thinking && !error
+      ? extractPlan(content)
+      : null;
+
   return (
     <div className="bubble-row bubble-row-assistant">
       <div className="bubble-meta">
@@ -187,14 +269,37 @@ export function Message({
             <span />
           </span>
         ) : (
-          <div className="bubble-md">
-            <ReactMarkdown
-              rehypePlugins={[rehypeHighlight]}
-              components={{ pre: PreWithLangPill }}
-            >
-              {content || ''}
-            </ReactMarkdown>
-          </div>
+          <>
+            {plan && (
+              <div className="plan-card" role="group" aria-label={plan.header}>
+                <div className="plan-card-head">
+                  <span className="plan-card-glyph" aria-hidden="true">▶</span>
+                  <span className="plan-card-title">{plan.header}</span>
+                  <span className="plan-card-count">
+                    {plan.items.length} steg
+                  </span>
+                </div>
+                <ol className="plan-card-list">
+                  {plan.items.map((item: string, i: number) => (
+                    <li key={i} className="plan-card-item">
+                      <span className="plan-card-num" aria-hidden="true">
+                        {i + 1}
+                      </span>
+                      <span className="plan-card-text">{item}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            <div className="bubble-md">
+              <ReactMarkdown
+                rehypePlugins={[rehypeHighlight]}
+                components={{ pre: PreWithLangPill }}
+              >
+                {plan ? plan.rest : content || ''}
+              </ReactMarkdown>
+            </div>
+          </>
         )}
         {streaming && content && <span className="streaming-cursor" />}
         {error && (
@@ -203,8 +308,19 @@ export function Message({
           </div>
         )}
       </div>
-      {(canReact || canPin || canRegenerate) && (
+      {(canReact || canPin || canRegenerate || canCopy) && (
         <div className="message-reactions">
+          {canCopy && (
+            <button
+              type="button"
+              className="reaction-btn"
+              onClick={() => void handleCopy()}
+              aria-label="Kopier som markdown"
+              title={copied ? 'Kopiert' : 'Kopier som markdown'}
+            >
+              <span aria-hidden="true">{copied ? '✓' : '📋'}</span>
+            </button>
+          )}
           {canReact && (
             <>
               <button

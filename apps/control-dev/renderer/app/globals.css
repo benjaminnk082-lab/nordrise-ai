@@ -5147,6 +5147,85 @@ input:-webkit-autofill:focus {
 .sb-dot.health-yellow { background: #e6a663; }
 .sb-dot.health-red    { background: #e0443e; box-shadow: 0 0 6px rgba(224,68,62,0.45); }
 
+/* ---------- Plan card (extracted from assistant replies) ---------- */
+.plan-card {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: linear-gradient(
+    135deg,
+    rgba(124, 92, 255, 0.08) 0%,
+    rgba(217, 119, 87, 0.06) 100%
+  );
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-warm);
+  border-radius: var(--radius-md);
+  position: relative;
+}
+.plan-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--space-2);
+}
+.plan-card-glyph {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-warm);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+}
+.plan-card-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.plan-card-count {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.plan-card-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: plan-step;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.plan-card-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.plan-card-num {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+.plan-card-text { letter-spacing: -0.005em; }
+
 /* ============================================================
    AgentActivityPanel — ClawBro-style live tool feed (.aap-*)
    ============================================================ */
