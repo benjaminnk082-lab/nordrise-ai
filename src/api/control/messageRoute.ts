@@ -424,9 +424,42 @@ async function handle(req: Request, res: Response, deps: MessageRouterDeps): Pro
         content: finalText,
         durationMs: result.durationMs,
       });
+      // Phase 3 — persist token usage. Best-effort: a DB write failure
+      // never prevents the user-facing `done` frame from going out.
+      // Project association is inherited from the ControlSession row
+      // (set via PATCH /control/sessions/:id/project). We re-read here
+      // because the renderer may have changed the assignment mid-stream.
+      try {
+        const sessRow = await deps.prisma.controlSession.findUnique({
+          where: { id: session.id },
+          select: { projectId: true },
+        });
+        await deps.prisma.tokenUsage.create({
+          data: {
+            controlSessionId: session.id,
+            projectId: sessRow?.projectId ?? null,
+            inputTokens: result.inputTokens ?? 0,
+            outputTokens: result.outputTokens ?? 0,
+            cacheReadTokens: result.cacheReadTokens ?? 0,
+            cacheCreationTokens: result.cacheCreationTokens ?? 0,
+            costUsd: result.costUsd ?? 0,
+            modelId: result.modelId ?? body.model ?? null,
+            durationMs: result.durationMs,
+          },
+        });
+      } catch (err) {
+        logger.warn({ err, controlSessionId: session.id }, 'tokenUsage persist failed');
+      }
       writeSseFrame(res, {
         event: 'done',
-        data: { durationMs: result.durationMs, costUsdInformational: result.costUsd, isError: false },
+        data: {
+          durationMs: result.durationMs,
+          costUsdInformational: result.costUsd,
+          isError: false,
+          inputTokens: result.inputTokens ?? 0,
+          outputTokens: result.outputTokens ?? 0,
+          modelId: result.modelId ?? body.model ?? null,
+        },
       });
     }
     logger.info({ controlSessionId: session.id, durationMs: result.durationMs, isError: result.isError }, 'control.message.done');

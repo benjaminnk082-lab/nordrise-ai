@@ -41,6 +41,7 @@ import {
   startAppImprovementWatcher,
   stopAppImprovementWatcher,
 } from './api/control/appImprovementWatcher.js';
+import { makeProjectsRouter } from './api/control/projectsRoute.js';
 
 const app = express();
 
@@ -194,6 +195,13 @@ controlRouter.use(
     seanNotesDir,
     allowedTokens: controlTokens,
   }),
+);
+// Phase 3 — projects + token usage. Additive (per CLAUDE.md §17 every
+// new field is optional/defaulted). The desktop client's Costs panel
+// reads from /control/usage; messageRoute.ts writes a TokenUsage row
+// after every successful stream so no client recording is needed.
+controlRouter.use(
+  makeProjectsRouter({ prisma, allowedTokens: controlTokens }),
 );
 app.use('/control', controlRouter);
 

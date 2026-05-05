@@ -28,10 +28,16 @@ model ControlSession {
   /// Per-thread system-prompt override. Appended after the global persona
   /// via --append-system-prompt in claudeBridge. NULL = use persona only.
   systemPrompt    String?   @db.Text
+  /// Phase 3 — optional project tag. SetNull on Project delete so we
+  /// never lose conversation history when a project goes away.
+  projectId       String?
+  project         Project?  @relation("ProjectSessions", fields: [projectId], references: [id], onDelete: SetNull)
   messages        Message[]
+  tokenUsage      TokenUsage[]
 
   @@index([lastActiveAt])
   @@index([archivedAt])
+  @@index([projectId, lastActiveAt])
 }
 
 model Message {
@@ -151,6 +157,48 @@ model ProactiveSettings {
   maxPerDay       Int      @default(10)
   cadenceMin      Int      @default(15)
   updatedAt       DateTime @updatedAt
+}
+
+/// Phase 3 — projects so the user can tag a thread with a context (e.g.
+/// "Tid for Service" or "Happy Time") and the Costs panel can break
+/// usage down per project. Default project is null (no tag); the desktop
+/// UI shows that as "General". Per CLAUDE.md §12 + §6.17: every new
+/// field is optional/defaulted so older gateway/client deploys see no
+/// missing-required-field errors during a roll-out window.
+model Project {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String?
+  createdAt   DateTime         @default(now())
+  sessions    ControlSession[] @relation("ProjectSessions")
+  tokenUsage  TokenUsage[]
+}
+
+/// Per-stream token usage. Written by `messageRoute.ts` immediately
+/// after the SSE `done` frame is sent. Cost is informational on the
+/// Max subscription (the field is reported by claude-code but not
+/// billed) — we still persist it so the Costs panel can show
+/// "what would this have cost on the API". Cache-read tokens are
+/// excluded from "session tokens" elsewhere (see costTracker.ts) but
+/// stored here for completeness.
+model TokenUsage {
+  id                  String          @id @default(cuid())
+  controlSessionId    String?
+  controlSession      ControlSession? @relation(fields: [controlSessionId], references: [id], onDelete: Cascade)
+  projectId           String?
+  project             Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  inputTokens         Int             @default(0)
+  outputTokens        Int             @default(0)
+  cacheReadTokens     Int             @default(0)
+  cacheCreationTokens Int             @default(0)
+  costUsd             Float           @default(0)
+  modelId             String?
+  durationMs          Int?
+  recordedAt          DateTime        @default(now())
+
+  @@index([controlSessionId, recordedAt])
+  @@index([projectId, recordedAt])
+  @@index([recordedAt])
 }
 
 /// Sean's self-improvement proposals. The watcher cron analyses recent

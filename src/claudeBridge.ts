@@ -27,6 +27,17 @@ export interface ClaudeBridgeResult {
   errorMessage?: string;
   rateLimited: boolean;
   costUsd: number;
+  /**
+   * Phase 3 — token usage. Defaulted to 0 when claude-code's
+   * stream-json `result` event lacks the `usage` block (older CLI
+   * versions, error paths). Optional fields keep backward-compat
+   * with callers that only read `costUsd`.
+   */
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+  modelId?: string;
 }
 
 export interface ClaudeBridgeOptions {
@@ -97,6 +108,20 @@ interface ResultEvent extends StreamEventBase {
   cost_usd?: number;
   duration_ms?: number;
   session_id: string;
+  /**
+   * claude-code 1.0+ reports usage on the result event. Optional
+   * because older versions/error paths may omit it.
+   */
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
+  /**
+   * `{ "claude-opus-4-7-1m": { … } }` — first key is the model id.
+   */
+  modelUsage?: Record<string, unknown>;
 }
 
 type StreamEvent = SystemInitEvent | AssistantEvent | ResultEvent | StreamEventBase;
@@ -339,6 +364,22 @@ export class ClaudeBridge extends EventEmitter {
         // long as auth is via CLAUDE_CODE_OAUTH_TOKEN and ANTHROPIC_API_KEY
         // is unset. The boot-time verify-auth check enforces that invariant.
 
+        // Phase 3 — surface token counts for the desktop's Costs panel.
+        const u = resultEvent?.usage ?? {};
+        const inputTokens = typeof u.input_tokens === 'number' ? u.input_tokens : 0;
+        const outputTokens = typeof u.output_tokens === 'number' ? u.output_tokens : 0;
+        const cacheReadTokens =
+          typeof u.cache_read_input_tokens === 'number' ? u.cache_read_input_tokens : 0;
+        const cacheCreationTokens =
+          typeof u.cache_creation_input_tokens === 'number'
+            ? u.cache_creation_input_tokens
+            : 0;
+        const modelUsage = resultEvent?.modelUsage;
+        const modelId =
+          modelUsage && typeof modelUsage === 'object'
+            ? Object.keys(modelUsage)[0]
+            : undefined;
+
         resolve({
           text: finalText,
           sessionId: resolvedSessionId,
@@ -347,6 +388,11 @@ export class ClaudeBridge extends EventEmitter {
           ...(isError ? { errorMessage: resultEvent?.result ?? stderrSnippet } : {}),
           rateLimited,
           costUsd,
+          inputTokens,
+          outputTokens,
+          cacheReadTokens,
+          cacheCreationTokens,
+          ...(modelId ? { modelId } : {}),
         });
       });
     });

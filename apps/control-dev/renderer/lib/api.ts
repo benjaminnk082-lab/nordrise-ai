@@ -14,6 +14,8 @@ import type {
   ProactiveAttemptRow,
   AppImprovementRow,
   AppImprovementScanResult,
+  ProjectRow,
+  UsageSummaryResponse,
 } from '../../src/server-types';
 
 interface IpcFetchInit {
@@ -215,6 +217,45 @@ export async function listProactiveAttempts(): Promise<ProactiveAttemptRow[]> {
   );
   return r.attempts;
 }
+
+// ---------- Phase 3 — projects + usage ----------
+
+export const projectsApi = {
+  list: async (): Promise<ProjectRow[]> => {
+    const r = await ipcFetch<{ projects: ProjectRow[] }>('/control/projects');
+    return r.projects;
+  },
+  create: (name: string, description?: string) =>
+    ipcFetch<ProjectRow>('/control/projects', {
+      method: 'POST',
+      body: { name, ...(description ? { description } : {}) },
+    }),
+  /** Tag a thread with a project (or clear via `null`). */
+  assignToSession: (sessionId: string, projectId: string | null) =>
+    ipcFetch<{ ok: boolean }>(`/control/sessions/${sessionId}/project`, {
+      method: 'PATCH',
+      body: { projectId },
+    }),
+};
+
+export const usageApi = {
+  /** `since` is ISO. Default is "last 30 days". */
+  summary: (since?: string) => {
+    const q = since ? `?since=${encodeURIComponent(since)}` : '';
+    return ipcFetch<UsageSummaryResponse>(`/control/usage${q}`);
+  },
+  /** Fetch the same data as a CSV string. */
+  csv: async (since?: string): Promise<string> => {
+    const q = since ? `?since=${encodeURIComponent(since)}` : '';
+    const r = await window.nordrise.invoke<{
+      ok: boolean;
+      status: number;
+      body: unknown;
+    }>('control:fetch', { path: `/control/usage.csv${q}`, method: 'GET' });
+    if (!r.ok) throw new Error(`csv fetch failed: ${r.status}`);
+    return typeof r.body === 'string' ? r.body : '';
+  },
+};
 
 // ---------- App-improvements (Sean's self-improvement queue) ----------
 

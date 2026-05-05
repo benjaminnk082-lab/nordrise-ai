@@ -6,7 +6,19 @@ export type SseEvent =
   | { event: 'session'; data: { claudeSessionId: string; controlSessionId: string } }
   | { event: 'partial'; data: { text: string } }
   | { event: 'tool'; data: { name: string; input?: string; output?: string; status: 'running' | 'done' } }
-  | { event: 'done'; data: { durationMs: number; costUsdInformational: number; isError: boolean } }
+  | {
+      event: 'done';
+      data: {
+        durationMs: number;
+        costUsdInformational: number;
+        isError: boolean;
+        /** Phase 3 — token usage snapshot. Optional for backward-compat
+         * with older gateways that don't surface token counts. */
+        inputTokens?: number;
+        outputTokens?: number;
+        modelId?: string | null;
+      };
+    }
   | { event: 'error'; data: { message: string; retryAfterMs?: number } }
   | { event: 'heartbeat'; data: Record<string, never> };
 
@@ -301,4 +313,57 @@ export interface AppImprovementScanResult {
   generated: number;
   skipped: boolean;
   reason?: string;
+}
+
+// ---------- Phase 3 — projects + token usage ----------
+
+export interface ProjectRow {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+}
+
+export interface TokenUsageRow {
+  id: string;
+  controlSessionId: string | null;
+  projectId: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  costUsd: number;
+  modelId: string | null;
+  durationMs: number | null;
+  recordedAt: string;
+}
+
+export interface UsageBucket {
+  /** Date in `YYYY-MM-DD` format. */
+  date: string;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
+export interface UsageByProject {
+  projectId: string | null;
+  projectName: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  /** Number of distinct ControlSession rows that contributed. */
+  sessionCount: number;
+}
+
+export interface UsageSummaryResponse {
+  /** Window the summary covers, ISO. */
+  since: string;
+  total: {
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number;
+  };
+  byProject: UsageByProject[];
+  byDay: UsageBucket[];
 }

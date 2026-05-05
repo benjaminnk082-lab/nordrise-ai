@@ -31,6 +31,7 @@ import { Titlebar } from './Titlebar';
 import { StatusBar } from './StatusBar';
 import { HealthPill } from './HealthPill';
 import { VaultSetupCard } from './VaultSetupCard';
+import { CostsPanel } from './CostsPanel';
 import { vaultApi } from '../lib/vault';
 import { quitAndInstall, getPendingUpdate } from '../lib/bridge';
 import {
@@ -468,6 +469,7 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
   // Phase 3 — vault setup modal opens when the user has no vault path
   // configured (or hits the "set up vault" CTA from the status bar).
   const [vaultSetupOpen, setVaultSetupOpen] = useState(false);
+  const [costsOpen, setCostsOpen] = useState(false);
 
   // Theme toggle — flips between dark and light only (the other named themes
   // remain reachable from Settings → Generelt). Persisted via settings:set so
@@ -633,6 +635,14 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
           >
             Søk
           </button>
+          <button
+            type="button"
+            onClick={() => setCostsOpen(true)}
+            className="link-button"
+            title="Kostnader siste 30 dager"
+          >
+            Costs
+          </button>
           {settings.vault.enabled && (
             <button
               type="button"
@@ -774,6 +784,7 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
           setActive({ kind: 'session', id: controlSessionId })
         }
       />
+      <CostsPanel open={costsOpen} onClose={() => setCostsOpen(false)} />
     </div>
   );
 }
