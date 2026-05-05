@@ -5576,4 +5576,108 @@ input:-webkit-autofill:focus {
   background: linear-gradient(180deg, var(--accent), var(--accent-warm));
 }
 
+/* ---------- Welcome suggestions (ChatPane empty state) ---------- */
+.welcome-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--space-4);
+  width: 100%;
+  max-width: 480px;
+}
+.welcome-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-spring),
+              border-color var(--motion-fast) var(--motion-spring),
+              transform var(--motion-fast) var(--motion-spring);
+}
+.welcome-suggestion:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+.welcome-suggestion-glyph {
+  font-size: 14px;
+  width: 22px;
+  flex-shrink: 0;
+  text-align: center;
+}
+.welcome-suggestion-text { letter-spacing: -0.005em; }
+
+/* ---------- Keyboard cheatsheet ---------- */
+.kb-cheatsheet { max-height: min(78vh, 560px); overflow-y: auto; }
+.kb-cheatsheet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-4);
+}
+.kb-cheatsheet-group {
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+.kb-cheatsheet-group-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin: 0 0 var(--space-2);
+  font-weight: 600;
+}
+.kb-cheatsheet-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kb-cheatsheet-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text);
+}
+.kb-cheatsheet-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  min-width: 110px;
+}
+.kb-cheatsheet-plus {
+  color: var(--text-faint);
+  font-size: 10px;
+  margin: 0 1px;
+}
+.kb-cheatsheet-key {
+  display: inline-block;
+  padding: 2px 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--separator);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0;
+  color: var(--text);
+  line-height: 1.1;
+}
+.kb-cheatsheet-label {
+  color: var(--text-muted);
+  letter-spacing: -0.005em;
+}
+
 
