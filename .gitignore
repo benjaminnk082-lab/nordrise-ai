@@ -39,3 +39,19 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Pre-commit security scan artefacts (Opsera DevSecOps)
+npm-audit.json
+npm-audit-stderr.txt
+grype-report.json
+grype-stderr.txt
+semgrep-report.json
+semgrep-stderr.txt
+checkov-report.json
+checkov-stderr.txt
+hadolint-report.json
+hadolint-stderr.txt
+gitleaks-report.json
+gitleaks-stderr.txt
+package-leakage-report.json
+precommit-scan-*.md

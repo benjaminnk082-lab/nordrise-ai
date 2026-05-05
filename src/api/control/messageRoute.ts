@@ -144,7 +144,7 @@ export function buildPermissionFragment(
   }
 
   // mode === 'custom' — emit concrete per-action policy.
-  const labels: Record<string, string> = {
+  const labels: Record<keyof NonNullable<typeof perAction>, string> = {
     vaultWrite: 'skrive til vault / sean-notes',
     telegramSend: 'sende Telegram-meldinger',
     webSearch: 'web-søk og scrape (Firecrawl/curl)',
@@ -153,7 +153,7 @@ export function buildPermissionFragment(
   };
   const lines: string[] = [];
   for (const [key, label] of Object.entries(labels)) {
-    const v = (perAction ?? {})[key as keyof typeof labels];
+    const v = perAction?.[key as keyof typeof labels];
     if (!v) continue;
     if (v === 'auto') lines.push(`- ${label}: utfør uten å spørre`);
     if (v === 'ask') lines.push(`- ${label}: spør først, vent på bekreftelse`);
