@@ -22,6 +22,7 @@ import {
 } from './vaultSync.js';
 import { runTeamsOAuth, type TeamsOAuthInput } from './teamsOAuth.js';
 import { captureVismaCookie, type VismaCookieInput } from './vismaCookieCapture.js';
+import { registerPhase3Ipc } from './phase3Ipc.js';
 
 const DEFAULT_BACKEND = 'https://sean-production-d872.up.railway.app';
 const TOKEN_SLOT = 'bearer';
@@ -627,4 +628,8 @@ export function registerIpc(): void {
       n.show();
     },
   );
+
+  // Phase 3 — vault auto-detect, skills, heartbeat, checkpoint, errors,
+  // lighthouse, preview. See `phase3Ipc.ts` and CLAUDE.md §12.
+  registerPhase3Ipc();
 }
