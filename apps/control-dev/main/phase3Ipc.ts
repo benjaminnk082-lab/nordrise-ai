@@ -50,6 +50,7 @@ import {
   tickNow,
 } from './heartbeat.js';
 import { getSettings } from './settingsStore.js';
+import { askSean } from './seanCall.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 /** Absolute path to the seed-skills shipped with the desktop app. */
@@ -203,11 +204,21 @@ export function registerPhase3Ipc(): void {
   initHeartbeat({
     getVaultPath: () => vaultRootFromSettings(),
     getMainWindow,
-    // TODO Phase 3.5: round-trip Sean. For now the daemon builds the
-    // prompt and a renderer helper picks it up via the broadcast — the
-    // canary in --unit mode only checks that the prompt is non-empty,
-    // which lib/heartbeat.buildHeartbeatPrompt already exercises.
-    askSean: async () => 'HEARTBEAT_OK',
+    askSean: async (prompt: string) => {
+      // Heartbeat uses Haiku to keep the cost-tail tiny — these calls
+      // happen up to ~50 times a day on the default 30-min interval.
+      const r = await askSean(prompt, {
+        controlSessionId: null,
+        model: 'claude-haiku-4-5',
+        timeoutMs: 60_000,
+      });
+      if (r.isError) {
+        // Surface to errors.md AND let the daemon's tick handler swallow
+        // — the user shouldn't see toasts for transient gateway hiccups.
+        throw new Error(`heartbeat askSean: ${r.errorMessage ?? 'unknown'}`);
+      }
+      return r.text;
+    },
     getActiveProjectName: () => null,
   });
   ipcMain.handle(

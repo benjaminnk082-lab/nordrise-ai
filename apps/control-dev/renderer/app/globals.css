@@ -5142,3 +5142,9 @@ input:-webkit-autofill:focus {
   border-top: 1px solid var(--separator);
 }
 
+/* ---------- HealthPill (status bar trailing) ---------- */
+.sb-dot.health-green  { background: #6ec48a; box-shadow: 0 0 6px rgba(110,196,138,0.55); }
+.sb-dot.health-yellow { background: #e6a663; }
+.sb-dot.health-red    { background: #e0443e; box-shadow: 0 0 6px rgba(224,68,62,0.45); }
+
+

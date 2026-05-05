@@ -29,6 +29,8 @@ import { GlobalSearch } from './GlobalSearch';
 import { PinnedPanel } from './PinnedPanel';
 import { Titlebar } from './Titlebar';
 import { StatusBar } from './StatusBar';
+import { HealthPill } from './HealthPill';
+import { VaultSetupCard } from './VaultSetupCard';
 import { vaultApi } from '../lib/vault';
 import { quitAndInstall, getPendingUpdate } from '../lib/bridge';
 import {
@@ -463,6 +465,10 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
     return sessions.find((s) => s.id === active.id) ?? null;
   }, [active, sessions]);
 
+  // Phase 3 — vault setup modal opens when the user has no vault path
+  // configured (or hits the "set up vault" CTA from the status bar).
+  const [vaultSetupOpen, setVaultSetupOpen] = useState(false);
+
   // Theme toggle — flips between dark and light only (the other named themes
   // remain reachable from Settings → Generelt). Persisted via settings:set so
   // it survives restarts. We apply optimistically because ThemeApplier is
@@ -659,7 +665,46 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
           tokens={null}
           costUsd={null}
           version={version || undefined}
+          trailing={<HealthPill />}
         />
+
+        {(!settings.vault?.localPath || vaultSetupOpen) && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.4)',
+              backdropFilter: 'blur(4px)',
+              zIndex: 200,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 24,
+            }}
+            onClick={() => {
+              if (settings.vault?.localPath) setVaultSetupOpen(false);
+            }}
+          >
+            <div onClick={(e) => e.stopPropagation()}>
+              <VaultSetupCard
+                onPicked={async (vaultPath) => {
+                  const next = await settingsApi.set({
+                    vault: { ...settings.vault, enabled: true, localPath: vaultPath },
+                  });
+                  setSettings(next);
+                  setVaultSetupOpen(false);
+                }}
+                onCancel={
+                  settings.vault?.localPath
+                    ? () => setVaultSetupOpen(false)
+                    : undefined
+                }
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       <CommandPalette

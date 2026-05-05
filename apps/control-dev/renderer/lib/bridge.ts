@@ -185,3 +185,168 @@ export async function captureVismaCookie(input: {
     input,
   );
 }
+
+// ============================================================
+// Phase 3 — vault, skills, heartbeat, checkpoint, errors,
+// lighthouse, preview. See CLAUDE.md §12 for the IPC inventory.
+// ============================================================
+
+// ---------- Vault ----------
+
+export interface VaultCandidate {
+  path: string;
+  hasObsidianFolder: boolean;
+  hasSeanFolder: boolean;
+}
+
+export const phase3Vault = {
+  detectCandidates: () =>
+    window.nordrise.invoke<VaultCandidate[]>('vault:detect-candidates'),
+  defaultNewPath: () =>
+    window.nordrise.invoke<string>('vault:default-new-path'),
+  create: (path?: string) =>
+    window.nordrise.invoke<{ path: string }>('vault:create', path),
+  ensureSeanStructure: (vaultRoot: string) =>
+    window.nordrise.invoke<{ touched: string[]; seededSkills: string[] }>(
+      'vault:ensure-sean-structure',
+      vaultRoot,
+    ),
+  readSean: (vaultRoot: string, relpath: string) =>
+    window.nordrise.invoke<string | null>('vault:read-sean', { vaultRoot, relpath }),
+  writeSean: (vaultRoot: string, relpath: string, content: string) =>
+    window.nordrise.invoke<{ ok: true }>('vault:write-sean', {
+      vaultRoot,
+      relpath,
+      content,
+    }),
+  pickFolder: () =>
+    window.nordrise.invoke<string | null>('vault:pick-folder-for-vault'),
+};
+
+// ---------- Skills ----------
+
+export interface SkillSummary {
+  name: string;
+  description: string;
+  when_to_use?: string;
+  required_tools: string[];
+  files: string[];
+  body: string;
+}
+
+export const phase3Skills = {
+  listInstalled: (vaultRoot: string) =>
+    window.nordrise.invoke<SkillSummary[]>('skills:list-installed', vaultRoot),
+  listRegistry: (vaultRoot: string) =>
+    window.nordrise.invoke<SkillSummary[]>('skills:list-registry', vaultRoot),
+  install: (vaultRoot: string, skillName: string) =>
+    window.nordrise.invoke<
+      | { ok: true; installedTo: string }
+      | { ok: false; error: string }
+    >('skills:install', { vaultRoot, skillName }),
+  load: (vaultRoot: string, skillName: string) =>
+    window.nordrise.invoke<SkillSummary | null>('skills:load', {
+      vaultRoot,
+      skillName,
+    }),
+  parse: (raw: string) => window.nordrise.invoke<SkillSummary>('skills:parse', raw),
+};
+
+// ---------- Heartbeat ----------
+
+export interface HeartbeatStatus {
+  state: 'idle' | 'running' | 'paused';
+  lastTickAt: number | null;
+  nextTickAt: number | null;
+  lastError: string | null;
+}
+
+export const phase3Heartbeat = {
+  status: () => window.nordrise.invoke<HeartbeatStatus>('heartbeat:status'),
+  pause: () => window.nordrise.invoke<HeartbeatStatus>('heartbeat:pause'),
+  resume: () => window.nordrise.invoke<HeartbeatStatus>('heartbeat:resume'),
+  tickNow: () => window.nordrise.invoke<HeartbeatStatus>('heartbeat:tick-now'),
+  /**
+   * Subscribe to status broadcasts. Returns an unsubscribe function.
+   * Used by the StatusBar Health pill to flip green/yellow/red live.
+   */
+  subscribe: (listener: (s: HeartbeatStatus) => void): (() => void) => {
+    const off = window.nordrise.on('heartbeat:status', (s: unknown) => {
+      listener(s as HeartbeatStatus);
+    });
+    return off;
+  },
+};
+
+// ---------- Checkpoint ----------
+
+export interface Checkpoint {
+  id: string;
+  createdAt: number;
+  summary: string;
+  git: boolean;
+  stashRef?: string;
+  copyDir?: string;
+}
+
+export const phase3Checkpoint = {
+  create: (workspace: string, summary: string) =>
+    window.nordrise.invoke<Checkpoint>('checkpoint:create', { workspace, summary }),
+  list: (workspace: string) =>
+    window.nordrise.invoke<Checkpoint[]>('checkpoint:list', workspace),
+  rollback: (workspace: string, id: string) =>
+    window.nordrise.invoke<{ ok: true } | { ok: false; error: string }>(
+      'checkpoint:rollback',
+      { workspace, id },
+    ),
+};
+
+// ---------- Errors / health ----------
+
+export const phase3Errors = {
+  log: (entry: {
+    level: 'error' | 'warn';
+    message: string;
+    stack?: string;
+    context?: Record<string, unknown>;
+  }) =>
+    window.nordrise.invoke<{ ok: true; path: string }>('errors:log', entry),
+  tail: (n = 20) => window.nordrise.invoke<string[]>('errors:tail', n),
+};
+
+// ---------- Lighthouse ----------
+
+export interface LighthouseScores {
+  performance: number;
+  accessibility: number;
+  bestPractices: number;
+  seo: number;
+}
+export interface LighthouseAudit {
+  url: string;
+  scores: LighthouseScores;
+  topIssues: Array<{
+    id: string;
+    title: string;
+    description: string;
+    impact: string;
+  }>;
+  jsonPath?: string;
+  startedAt: number;
+  finishedAt: number;
+}
+
+export const phase3Lighthouse = {
+  run: (p: { url: string; formFactor?: 'mobile' | 'desktop'; vaultRoot?: string }) =>
+    window.nordrise.invoke<LighthouseAudit>('lighthouse:run', p),
+};
+
+// ---------- Preview ----------
+
+export const phase3Preview = {
+  isLikely: (port: number) =>
+    window.nordrise.invoke<boolean>('preview:is-likely', port),
+  scan: (opts?: { timeoutMs?: number }) =>
+    window.nordrise.invoke<number[]>('preview:scan', opts ?? {}),
+  sniff: (url: string) => window.nordrise.invoke<string>('preview:sniff', url),
+};
