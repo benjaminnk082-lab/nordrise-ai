@@ -93,6 +93,8 @@ export interface TitlebarProps {
   onOpenSettings: () => void;
   onToggleTheme: () => void;
   themeMode: 'dark' | 'light' | 'solar' | 'cyberpunk' | 'compact';
+  /** Optional — opens the keyboard cheatsheet modal. */
+  onShowCheatsheet?: () => void;
 }
 
 export function Titlebar({
@@ -102,6 +104,7 @@ export function Titlebar({
   onOpenSettings,
   onToggleTheme,
   themeMode,
+  onShowCheatsheet,
 }: TitlebarProps) {
   const [maximized, setMaximized] = useState(false);
 
@@ -183,6 +186,16 @@ export function Titlebar({
             {themeMode === 'dark' ? '☀' : '☾'}
           </span>
         </button>
+        {onShowCheatsheet && (
+          <button
+            type="button"
+            className="tb-icon-btn"
+            onClick={onShowCheatsheet}
+            title="Hurtigtaster (?)"
+          >
+            <span className="tb-icon-btn-glyph" aria-hidden="true">?</span>
+          </button>
+        )}
         <button
           type="button"
           className="tb-icon-btn"

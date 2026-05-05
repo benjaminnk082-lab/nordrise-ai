@@ -82,6 +82,19 @@ function genLocalId(): string {
   return `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+/**
+ * Three starter prompts shown as clickable chips in the welcome card.
+ * Click → fills the composer input (does not auto-send). Picked to
+ * cover the three main verbs Sean serves: research, code, and the
+ * meta-task of self-introspection. All in Norwegian to match the
+ * desktop-language baseline.
+ */
+const WELCOME_SUGGESTIONS: Array<{ glyph: string; text: string }> = [
+  { glyph: '🔍', text: 'Hva har skjedd i nordrise-ai-repoet siste 7 dager?' },
+  { glyph: '✎', text: 'Skriv en kort oppsummering av denne tråden i Sean/sessions/' },
+  { glyph: '⌬', text: 'Hva jobber jeg med akkurat nå? Sjekk HEARTBEAT.md.' },
+];
+
 export function ChatPane({
   sessionId,
   knownSession,
@@ -489,9 +502,27 @@ export function ChatPane({
                   ? 'Skriv en melding nedenfor — eller dra og slipp en fil for å legge den ved.'
                   : 'Trykk + Ny i venstre kolonne, eller skriv direkte i komposisjonsfeltet.'}
               </div>
+              <div className="welcome-suggestions" aria-label="Forslag til startspørsmål">
+                {WELCOME_SUGGESTIONS.map((s) => (
+                  <button
+                    key={s.text}
+                    type="button"
+                    className="welcome-suggestion"
+                    onClick={() => setDraftText(s.text)}
+                    title="Fyll inn i komposisjonsfeltet"
+                  >
+                    <span className="welcome-suggestion-glyph" aria-hidden="true">
+                      {s.glyph}
+                    </span>
+                    <span className="welcome-suggestion-text">{s.text}</span>
+                  </button>
+                ))}
+              </div>
               {!sessionId && (
                 <div className="pane-welcome-hint">
                   <kbd>Ctrl</kbd>+<kbd>K</kbd> for hurtig-oppgaver
+                  <span style={{ margin: '0 6px', opacity: 0.4 }}>·</span>
+                  <kbd>?</kbd> for hurtigtaster
                 </div>
               )}
             </div>

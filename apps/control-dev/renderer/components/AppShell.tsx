@@ -34,6 +34,7 @@ import { VaultSetupCard } from './VaultSetupCard';
 import { CostsPanel } from './CostsPanel';
 import { LighthousePanel } from './LighthousePanel';
 import { PreviewPanel } from './PreviewPanel';
+import { KeyboardCheatsheet } from './KeyboardCheatsheet';
 import { vaultApi } from '../lib/vault';
 import { quitAndInstall, getPendingUpdate } from '../lib/bridge';
 import {
@@ -384,7 +385,8 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
     [refreshSessions],
   );
 
-  // Ctrl+K opens the quick-task palette; Ctrl+F opens the global search.
+  // Ctrl+K opens the quick-task palette; Ctrl+F opens the global search;
+  // ? opens the keyboard cheatsheet.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
@@ -394,6 +396,16 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault();
         setGlobalSearchOpen(true);
+      }
+      // `?` (Shift+/) opens the cheatsheet — but only when the user
+      // isn't typing in an input or textarea, otherwise it'd hijack
+      // the question-mark character in the composer.
+      if (e.key === '?') {
+        const t = e.target as HTMLElement | null;
+        const tag = t?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || t?.isContentEditable) return;
+        e.preventDefault();
+        setCheatsheetOpen(true);
       }
     }
     window.addEventListener('keydown', onKey);
@@ -474,6 +486,7 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
   const [costsOpen, setCostsOpen] = useState(false);
   const [lighthouseOpen, setLighthouseOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
 
   // Theme toggle — flips between dark and light only (the other named themes
   // remain reachable from Settings → Generelt). Persisted via settings:set so
@@ -510,6 +523,7 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
           }}
           onToggleTheme={handleToggleTheme}
           themeMode={settings.theme ?? 'dark'}
+          onShowCheatsheet={() => setCheatsheetOpen(true)}
         />
 
         {updateReady && (
@@ -770,6 +784,10 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
         vaultRoot={settings.vault?.localPath || undefined}
       />
       <PreviewPanel open={previewOpen} onClose={() => setPreviewOpen(false)} />
+      <KeyboardCheatsheet
+        open={cheatsheetOpen}
+        onClose={() => setCheatsheetOpen(false)}
+      />
     </div>
   );
 }
