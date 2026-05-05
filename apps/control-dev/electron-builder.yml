@@ -1,0 +1,51 @@
+appId: tech.bennyk.nordrise.control
+productName: Nordrise Control
+artifactName: "Nordrise Installer.${ext}"
+copyright: "© 2026 Benjamin Nicolai Kleiven / Nordrise"
+
+directories:
+  output: release
+  buildResources: ../installer/assets
+
+files:
+  - dist/**/*
+  - "!**/*.map"
+  - package.json
+
+extraResources:
+  - from: dist/assets
+    to: assets
+
+asar: true
+compression: maximum
+
+publish:
+  - provider: github
+    owner: benjaminnk082-lab
+    repo: nordrise-ai
+    releaseType: release
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: ../installer/assets/nordrise-icon.ico
+  # publisherName intentionally omitted: when set, electron-updater requires
+  # the downloaded installer's Authenticode signature to match this publisher.
+  # We don't have a code-signing certificate, so updates would always fail
+  # with "is not digitally signed". Removing publisherName disables that
+  # verification step. SmartScreen still warns once on first install (clear
+  # via "Run anyway"). When we get an EV cert, restore publisherName.
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: ../installer/assets/nordrise-icon.ico
+  uninstallerIcon: ../installer/assets/nordrise-icon.ico
+  installerHeaderIcon: ../installer/assets/nordrise-icon.ico
+  deleteAppDataOnUninstall: false
+  shortcutName: "Nordrise Control"
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  include: ../installer/nordrise-installer.nsh

@@ -23,7 +23,10 @@
     "prisma:migrate": "prisma migrate deploy",
     "prisma:migrate:dev": "prisma migrate dev",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "sandbox:install": "npm install --prefix apps/control-dev",
+    "sandbox:typecheck": "npm run typecheck --prefix apps/control-dev",
+    "dev:sandbox": "npm run dev --prefix apps/control-dev"
   },
   "dependencies": {
     "@paralleldrive/cuid2": "^2.2.2",

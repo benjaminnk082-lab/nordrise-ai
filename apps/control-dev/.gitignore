@@ -1,0 +1,11 @@
+node_modules
+dist
+.next
+out
+release
+*.tsbuildinfo
+
+# Sandbox-only local state (NOT in apps/control/.gitignore)
+data-dev/
+*.local.json
+*.sandbox.log
