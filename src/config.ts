@@ -52,11 +52,17 @@ const schema = z.object({
   /**
    * Public Nordrise-AI repo cloned into `${WORKSPACE_DIR}/codebase` at boot
    * (and pulled every 30 min) so Sean can read his own source.
+   *
+   * Updated 2026-05-05: the legacy default `BennyK-tech/Nordrise-AI` points
+   * at a GitHub account that is no longer accessible (the BennyK-Tech user
+   * is down). The 30-min auto-pull tick was therefore failing or pulling a
+   * stale snapshot. Default now points at the active fork. Override via the
+   * `NORDRISE_REPO_URL` env var on Railway if you ever migrate again.
    */
   NORDRISE_REPO_URL: z
     .string()
     .url()
-    .default('https://github.com/BennyK-tech/Nordrise-AI.git'),
+    .default('https://github.com/benjaminnk082-lab/nordrise-ai.git'),
 });
 
 function mustNotHaveAnthropicApiKey() {

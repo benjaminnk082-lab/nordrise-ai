@@ -1,6 +1,14 @@
-appId: tech.bennyk.nordrise.control
-productName: Nordrise Control
-artifactName: "Nordrise Installer.${ext}"
+# SANDBOX BUILD CONFIG — distinct from apps/control/electron-builder.yml on
+# every field that influences install location, NSIS registry keys, the
+# OS Add/Remove Programs entry, and GitHub release artefacts. If you ever
+# run `npm run package` in this directory, the resulting installer must
+# coexist with the live Nordrise Control install on the same machine and
+# MUST NEVER publish to the public release feed (the auto-updater on every
+# user's machine watches that feed; a dev build appearing there would force
+# everyone onto a rough sandbox build).
+appId: tech.bennyk.nordrise.control.dev
+productName: Nordrise Control Dev
+artifactName: "Nordrise Dev Installer.${ext}"
 copyright: "© 2026 Benjamin Nicolai Kleiven / Nordrise"
 
 directories:
@@ -19,23 +27,16 @@ extraResources:
 asar: true
 compression: maximum
 
-publish:
-  - provider: github
-    owner: benjaminnk082-lab
-    repo: nordrise-ai
-    releaseType: release
+# `publish` deliberately omitted — dev builds are local-only. To produce a
+# real release, push a `control-v*` tag and let the GitHub Actions workflow
+# do it from apps/control/.
 
 win:
   target:
     - target: nsis
       arch: [x64]
   icon: ../installer/assets/nordrise-icon.ico
-  # publisherName intentionally omitted: when set, electron-updater requires
-  # the downloaded installer's Authenticode signature to match this publisher.
-  # We don't have a code-signing certificate, so updates would always fail
-  # with "is not digitally signed". Removing publisherName disables that
-  # verification step. SmartScreen still warns once on first install (clear
-  # via "Run anyway"). When we get an EV cert, restore publisherName.
+  # See apps/control/electron-builder.yml for the publisherName rationale.
 
 nsis:
   oneClick: false
@@ -45,7 +46,7 @@ nsis:
   uninstallerIcon: ../installer/assets/nordrise-icon.ico
   installerHeaderIcon: ../installer/assets/nordrise-icon.ico
   deleteAppDataOnUninstall: false
-  shortcutName: "Nordrise Control"
+  shortcutName: "Nordrise Control Dev"
   createDesktopShortcut: true
   createStartMenuShortcut: true
   include: ../installer/nordrise-installer.nsh
