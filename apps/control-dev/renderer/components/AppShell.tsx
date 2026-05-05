@@ -14,7 +14,7 @@ import { useThreadState } from '../state/thread';
 import { useStream } from '../hooks/useStream';
 import { ThreadList, type ActiveSelection } from './ThreadList';
 import { ChatPane, type ReadyAttachment } from './ChatPane';
-import { ThinkingPanel } from './ThinkingPanel';
+import { AgentActivityPanel } from './AgentActivityPanel';
 import { TelegramHistory } from './TelegramHistory';
 import { QuickTaskManager } from './QuickTaskManager';
 import { CommandPalette } from './CommandPalette';
@@ -547,6 +547,43 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
                 }
               }}
             />
+            <div className="sb-presence-extras" role="group" aria-label="Hurtighandlinger">
+              {settings.vault?.enabled && (
+                <button
+                  type="button"
+                  className="sb-presence-action"
+                  onClick={() => setSeanNotesOpen(true)}
+                  title="Forslag fra Sean"
+                >
+                  <span className="sb-presence-action-glyph" aria-hidden="true">✦</span>
+                  <span className="sb-presence-action-label">Sean&apos;s notater</span>
+                  {seanNotesCount > 0 && (
+                    <span className="sb-presence-action-badge">{seanNotesCount}</span>
+                  )}
+                </button>
+              )}
+              <button
+                type="button"
+                className="sb-presence-action"
+                onClick={() => setPinnedPanelOpen(true)}
+                title="Pinet meldinger"
+              >
+                <span className="sb-presence-action-glyph" aria-hidden="true">★</span>
+                <span className="sb-presence-action-label">Pinet</span>
+                {pinnedCount > 0 && (
+                  <span className="sb-presence-action-badge">{pinnedCount}</span>
+                )}
+              </button>
+              <button
+                type="button"
+                className="sb-presence-action"
+                onClick={() => setManagerOpen(true)}
+                title="Quick-tasks (Ctrl+L)"
+              >
+                <span className="sb-presence-action-glyph" aria-hidden="true">⚡</span>
+                <span className="sb-presence-action-label">Quick-tasks</span>
+              </button>
+            </div>
             <div className="sb-presence" role="contentinfo">
               <span className="sb-presence-avatar" aria-hidden="true">B</span>
               <span className="sb-presence-name">Benjamin</span>
@@ -589,113 +626,35 @@ export function AppShell({ version, pendingUpdate, onLogout }: AppShellProps) {
           )}
 
           {active.kind !== 'telegram' && (
-            <ThinkingPanel tools={state.toolCalls} streaming={state.streaming} />
+            <AgentActivityPanel
+              tools={state.toolCalls}
+              streaming={state.streaming}
+              onAbort={state.streaming ? handleAbort : undefined}
+            />
           )}
         </div>
 
-        <div className="shell-foot">
-          <PermissionModePill
-            mode={settings.permissionMode ?? 'auto'}
-            onChange={(m) => void handleChangePermissionMode(m)}
-          />
-          <SeanStatusPill />
-          <button
-            type="button"
-            onClick={() => setManagerOpen(true)}
-            className="link-button"
-          >
-            Quick-tasks
-          </button>
-          <RoutinesPill />
-          <SuggestionsPill />
-          <button
-            type="button"
-            onClick={() => setPinnedPanelOpen(true)}
-            className="link-button"
-            title="Pinet meldinger"
-          >
-            Pinet
-            {pinnedCount > 0 && (
-              <span
-                style={{
-                  marginLeft: 6,
-                  padding: '1px 6px',
-                  borderRadius: 999,
-                  background: 'var(--surface-active)',
-                  color: 'var(--text)',
-                  fontSize: 10,
-                  fontWeight: 600,
-                }}
-              >
-                {pinnedCount}
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setGlobalSearchOpen(true)}
-            className="link-button"
-            title="Søk (Ctrl+F)"
-          >
-            Søk
-          </button>
-          <button
-            type="button"
-            onClick={() => setCostsOpen(true)}
-            className="link-button"
-            title="Kostnader siste 30 dager"
-          >
-            Costs
-          </button>
-          <button
-            type="button"
-            onClick={() => setLighthouseOpen(true)}
-            className="link-button"
-            title="Lighthouse audit"
-          >
-            Lighthouse
-          </button>
-          <button
-            type="button"
-            onClick={() => setPreviewOpen((v) => !v)}
-            className="link-button"
-            title="Live preview"
-          >
-            Preview
-          </button>
-          {settings.vault.enabled && (
-            <button
-              type="button"
-              onClick={() => setSeanNotesOpen(true)}
-              className="link-button"
-              title="Forslag fra Sean"
-            >
-              Sean&apos;s notater
-              {seanNotesCount > 0 && (
-                <span
-                  style={{
-                    marginLeft: 6,
-                    padding: '1px 6px',
-                    borderRadius: 999,
-                    background: 'var(--surface-active)',
-                    color: 'var(--text)',
-                    fontSize: 10,
-                    fontWeight: 600,
-                  }}
-                >
-                  {seanNotesCount}
-                </span>
-              )}
-            </button>
-          )}
-        </div>
-
+        {/* Bottom row decluttered. Most actions moved to:
+            - Cmd+K palette (Routines, Suggestions, Lighthouse, Preview, Search, Costs)
+            - Sidebar presence area (Sean's notater, Pinet)
+            - Titlebar (PermissionMode, Settings, Theme)
+            The status bar stays slim with model + tokens + cost + Health. */}
         <StatusBar
           modelLabel={modelLabel}
           tokens={null}
           costUsd={null}
           version={version || undefined}
-          trailing={<HealthPill />}
+          trailing={
+            <>
+              <PermissionModePill
+                mode={settings.permissionMode ?? 'auto'}
+                onChange={(m) => void handleChangePermissionMode(m)}
+              />
+              <RoutinesPill />
+              <SuggestionsPill />
+              <HealthPill />
+            </>
+          }
         />
 
         {(!settings.vault?.localPath || vaultSetupOpen) && (
