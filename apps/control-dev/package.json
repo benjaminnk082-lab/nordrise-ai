@@ -1,6 +1,6 @@
 {
   "name": "nordrise-control-dev",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "private": true,
   "description": "Nordrise Control — sandbox/dev mirror of apps/control. Isolated userData, port 4101, NEVER ship.",
   "main": "dist/main/index.js",
